@@ -292,7 +292,7 @@ class RunnerTests(TempHome):
     def test_commands_switches_and_only_for(self):
         tool = read_tool(self.script("pit.py", self.COMMAND_TOOL))
         places = {"data": "/D"}
-        D_DB = os.path.join("/D", "pit.sqlite")  # file settings use this computer's path style
+        D_DB = os.path.normpath(os.path.join("/D", "pit.sqlite"))  # file settings use this computer's path style
         v = tool.resolve({"command": "update", "full": "yes", "verbose": "on"}, places)
         self.assertEqual(v, {"db": D_DB, "verbose": True, "command": "update", "full": True})
         cmd = build_command(tool, v, engine=None)[2:]

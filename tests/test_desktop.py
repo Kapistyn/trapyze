@@ -272,7 +272,8 @@ class DesktopTests(unittest.TestCase):
                 t_new.start()
                 t_old.join(20)
                 self.assertFalse(t_old.is_alive())
-        self.assertTrue(wait_for(lambda: tray2.icons and wv2.windows))
+        self.assertTrue(wait_for(lambda: tray2.icons and wv2.windows),
+                        f"new one: returned {result!r}, alive {t_new.is_alive()}, sees {dk.find_running(self.home)!r}")
         self.assertTrue(wait_for(lambda: (dk.find_running(self.home) or {}).get("version") not in (None, "0.6.0")))
         tray2.icons[0].menu.click("Quit traPYze")
         t_new.join(20)

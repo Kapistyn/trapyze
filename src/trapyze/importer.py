@@ -549,6 +549,14 @@ def add_label(source: str, label: dict[str, Any], dependencies: list[str] | None
 
 
 # The scan ------------------------------------------------------------------------
+def _exists(path: str) -> bool:
+    """Path.exists that says no instead of failing on an unreachable network path (WinError 64)."""
+    try:
+        return Path(path).exists()
+    except OSError:
+        return False
+
+
 def wsl_distros(platform: str | None = None, run=None, exists=None) -> list[str]:
     """The Linux systems installed in WSL, Ubuntu first (empty when there are none, or not Windows).
 
@@ -560,7 +568,7 @@ def wsl_distros(platform: str | None = None, run=None, exists=None) -> list[str]
         return []
     run = run or (lambda cmd: subprocess.run(cmd, capture_output=True, timeout=15,
                                              creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)))
-    exists = exists or (lambda p: Path(p).exists())
+    exists = exists or _exists
     names: list[str] = []
     try:
         done = run(["wsl.exe", "--list", "--quiet"])
@@ -577,7 +585,7 @@ def wsl_distros(platform: str | None = None, run=None, exists=None) -> list[str]
 
 
 def wsl_root(distro: str, exists=None) -> str:
-    exists = exists or (lambda p: Path(p).exists())
+    exists = exists or _exists
     for root in ("\\\\wsl.localhost", "\\\\wsl$"):
         if exists(f"{root}\\{distro}"):
             return f"{root}\\{distro}"
