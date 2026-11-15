@@ -123,7 +123,7 @@ class ImportTests(unittest.TestCase):
         self.assertEqual(report["tools"], ["price_db"])
         self.assertEqual(report["hidden"], ["price_db.fixes.hwm_from_aa"])  # runs on its own, but the main doesn't use it
         self.assertEqual(sorted(report["data"]), ["index_members.xlsx", "price_db.sqlite"])
-        self.assertEqual(report["env"], [str(self.prog / "price.env")])
+        self.assertEqual([Path(p).resolve() for p in report["env"]], [(self.prog / "price.env").resolve()])
         self.assertFalse((self.home.scripts / "price_db" / "price.env").exists())
         self.assertTrue((self.home.scripts / "price_db" / "helpers.py").exists())
         self.assertFalse((self.home.scripts / "price_db" / "validate.log").exists())

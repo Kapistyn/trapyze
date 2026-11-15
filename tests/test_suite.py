@@ -18,9 +18,9 @@ from trapyze.templates import KINDS, make  # noqa: E402
 from trapyze.versions import Versions  # noqa: E402
 
 try:
-    from test_web import WebTests
-except ImportError:
-    from tests.test_web import WebTests
+    import test_web as _web
+except ImportError:  # run from the project root
+    from tests import test_web as _web
 
 LABEL = '# /// script\n# dependencies = [{deps}]\n# [tool.trapyze]\n# name = "T"\n# description = "d"\n{extra}# ///\n'
 
@@ -159,10 +159,10 @@ class EditorTests(unittest.TestCase):
         self.assertEqual([e["id"] for e in found], ["vscode", "system"])
         calls = []
         editors.open_in(found[0], Path("/x/t.py"), popen=lambda cmd, **kw: calls.append((cmd, kw)))
-        self.assertEqual(calls[0][0], ["/usr/bin/codium", "/x/t.py"])
+        self.assertEqual(calls[0][0], ["/usr/bin/codium", str(Path("/x/t.py"))])
 
 
-class SuiteWebTests(WebTests):
+class SuiteWebTests(_web.WebTests):
     def test_suite_endpoints(self):
         status, data = self.request("POST", "/api/new-tool", {"name": "Fetch AEX", "kind": "collect"})
         self.assertEqual(status, 200, data)
@@ -198,7 +198,7 @@ class SuiteWebTests(WebTests):
         self.assertEqual(status, 404)
 
 
-for name in [n for n in dir(WebTests) if n.startswith("test_")]:
+for name in [n for n in dir(_web.WebTests) if n.startswith("test_")]:
     setattr(SuiteWebTests, name, None)
 
 if __name__ == "__main__":

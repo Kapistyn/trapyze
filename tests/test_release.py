@@ -18,9 +18,9 @@ from trapyze import __version__, updater  # noqa: E402
 from trapyze.desktop import make_mac_app  # noqa: E402
 
 try:
-    from test_web import WebTests
-except ImportError:
-    from tests.test_web import WebTests
+    import test_web as _web
+except ImportError:  # run from the project root
+    from tests import test_web as _web
 
 
 class Resp(io.BytesIO):
@@ -147,6 +147,7 @@ class ReleaseToolTests(unittest.TestCase):
 
 
 class MacAppTests(unittest.TestCase):
+    @unittest.skipIf(sys.platform.startswith("win"), "file permissions work differently on Windows")
     def test_bundle(self):
         tmp = Path(tempfile.mkdtemp(prefix="tz-mac-"))
         try:
@@ -161,7 +162,7 @@ class MacAppTests(unittest.TestCase):
             shutil.rmtree(tmp, ignore_errors=True)
 
 
-class UpdateWebTests(WebTests):
+class UpdateWebTests(_web.WebTests):
     def test_update_endpoints(self):
         status, data = self.request("GET", "/api/tools")
         self.assertEqual(data["update"]["current"], __version__)
@@ -196,7 +197,7 @@ class UpdateWebTests(WebTests):
         self.assertTrue(log.with_name("update-last.log").exists())
 
 
-for name in [n for n in dir(WebTests) if n.startswith("test_")]:
+for name in [n for n in dir(_web.WebTests) if n.startswith("test_")]:
     setattr(UpdateWebTests, name, None)
 
 if __name__ == "__main__":

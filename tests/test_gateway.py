@@ -255,8 +255,8 @@ class ToolRunTests(unittest.TestCase):
             for _ in range(2):
                 run = Run(home, tool, engine=None, extra_env=env, secrets=secrets).start()
                 result = run.wait(60)
-                self.assertEqual(result.status, "done", (run.run_dir / "log.txt").read_text())
-                logs.append((run.run_dir / "log.txt").read_text())
+                self.assertEqual(result.status, "done", (run.run_dir / "log.txt").read_text(encoding="utf-8"))
+                logs.append((run.run_dir / "log.txt").read_text(encoding="utf-8"))
             self.assertIn("got ASML fresh", logs[0])
             self.assertIn("got ASML from cache", logs[1])
             self.assertIn("key is ••••••", logs[0])

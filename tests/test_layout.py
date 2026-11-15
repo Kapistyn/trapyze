@@ -12,9 +12,9 @@ from trapyze.layout import Layout, suggest, topics  # noqa: E402
 from trapyze.store import StoreError  # noqa: E402
 
 try:
-    from test_web import WebTests
+    import test_web as _web
 except ImportError:  # run from the project root
-    from tests.test_web import WebTests
+    from tests import test_web as _web
 
 
 def tool(name, desc="", deps=(), conns=(), writes=(), reads=None, source=""):
@@ -121,7 +121,7 @@ class LayoutTests(unittest.TestCase):
             self.lay.set_view("tiles")
 
 
-class LayoutWebTests(WebTests):
+class LayoutWebTests(_web.WebTests):
     """The /api/layout endpoints on a real server (borrowing WebTests' setup)."""
 
     def test_layout_endpoints(self):
@@ -144,7 +144,7 @@ class LayoutWebTests(WebTests):
         self.assertEqual(status, 400)
 
 
-for name in [n for n in dir(WebTests) if n.startswith("test_")]:
+for name in [n for n in dir(_web.WebTests) if n.startswith("test_")]:
     setattr(LayoutWebTests, name, None)  # run only the layout test here, not WebTests' own again
 
 if __name__ == "__main__":

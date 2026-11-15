@@ -651,7 +651,7 @@ def _walk(src: Path) -> tuple[list[Path], list[str]]:
 def _same_or_inside(path: Path, root: Path) -> bool:
     import os
 
-    a, b = os.path.normcase(os.path.abspath(path)), os.path.normcase(os.path.abspath(root))
+    a, b = os.path.normcase(os.path.realpath(path)), os.path.normcase(os.path.realpath(root))
     return a == b or a.startswith(b.rstrip("\\/") + os.sep)
 
 

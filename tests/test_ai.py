@@ -16,9 +16,9 @@ from trapyze import ai  # noqa: E402
 from trapyze.label import read_tool  # noqa: E402
 
 try:
-    from test_web import WebTests
-except ImportError:
-    from tests.test_web import WebTests
+    import test_web as _web
+except ImportError:  # run from the project root
+    from tests import test_web as _web
 
 SCRIPT = ('# /// script\n# dependencies = []\n# [tool.trapyze]\n# name = "Ranker"\n# description = "Ranks"\n# ///\n'
           'import os\nAPI_KEY = "abcd1234efgh5678"\nprint("vault-value-xyz")\n')
@@ -127,7 +127,7 @@ class AITests(unittest.TestCase):
             ai.ask("openai", "k", "", "s", "u")
 
 
-class AIWebTests(WebTests):
+class AIWebTests(_web.WebTests):
     def test_ai_endpoints(self):
         status, data = self.request("POST", "/api/new-tool", {"name": "Fetch AEX", "kind": "collect"})
         tid = data["result"]["id"]
@@ -179,7 +179,7 @@ class AIWebTests(WebTests):
         self.assertEqual(status, 400)
 
 
-for name in [n for n in dir(WebTests) if n.startswith("test_")]:
+for name in [n for n in dir(_web.WebTests) if n.startswith("test_")]:
     setattr(AIWebTests, name, None)
 
 if __name__ == "__main__":

@@ -13,6 +13,7 @@ import datetime
 import json
 import mimetypes
 import os
+import socket
 import secrets
 import subprocess
 import sys
@@ -1527,6 +1528,19 @@ class Handler(BaseHTTPRequestHandler):
             live.wait(last, timeout=1.0)
 
 
+class TrapyzeServer(ThreadingHTTPServer):
+    """The web server, bound to 127.0.0.1. On Windows, SO_REUSEADDR would let a second
+    program (or a second traPYze) listen on the same port and receive our requests;
+    there the port is taken exclusively instead."""
+
+    allow_reuse_address = os.name != "nt"
+
+    def server_bind(self) -> None:
+        if os.name == "nt" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
 def make_server(home: Home, port: int = 0) -> tuple[ThreadingHTTPServer, App]:
     """A ready server bound to 127.0.0.1. Port 0 picks a free one."""
     app = App(home)
@@ -1535,7 +1549,7 @@ def make_server(home: Home, port: int = 0) -> tuple[ThreadingHTTPServer, App]:
     last_error: OSError | None = None
     for p in candidates:
         try:
-            server = ThreadingHTTPServer(("127.0.0.1", p), handler)
+            server = TrapyzeServer(("127.0.0.1", p), handler)
             break
         except OSError as exc:
             last_error = exc

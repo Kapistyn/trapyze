@@ -20,7 +20,7 @@ jobs:
       - name: Point everything at this repository
         run: python3 tools/set_repo.py "$GITHUB_REPOSITORY"
       - name: Test
-        run: uv run --python 3.12 --with pytest python -m pytest -q
+        run: uv run --python 3.12 --with pytest --with pillow python -m pytest -q
       - name: Build the wheel
         run: uv build --wheel --out-dir dist
       - name: Release notes and install scripts

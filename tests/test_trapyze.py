@@ -292,13 +292,14 @@ class RunnerTests(TempHome):
     def test_commands_switches_and_only_for(self):
         tool = read_tool(self.script("pit.py", self.COMMAND_TOOL))
         places = {"data": "/D"}
+        D_DB = os.path.join("/D", "pit.sqlite")  # file settings use this computer's path style
         v = tool.resolve({"command": "update", "full": "yes", "verbose": "on"}, places)
-        self.assertEqual(v, {"db": "/D/pit.sqlite", "verbose": True, "command": "update", "full": True})
+        self.assertEqual(v, {"db": D_DB, "verbose": True, "command": "update", "full": True})
         cmd = build_command(tool, v, engine=None)[2:]
-        self.assertEqual(cmd, ["--db", "/D/pit.sqlite", "-v", "update", "--full"])
+        self.assertEqual(cmd, ["--db", D_DB, "-v", "update", "--full"])
         v = tool.resolve({"command": "asof", "day": "2009-06-05", "full": "yes"}, places)
         self.assertNotIn("full", v)  # belongs to update only, so it is dropped
-        self.assertEqual(build_command(tool, v, engine=None)[2:], ["--db", "/D/pit.sqlite", "asof", "2009-06-05"])
+        self.assertEqual(build_command(tool, v, engine=None)[2:], ["--db", D_DB, "asof", "2009-06-05"])
         with self.assertRaises(SettingError) as ctx:
             tool.resolve({"command": "asof"}, places)
         self.assertIn("Date needs a value.", str(ctx.exception))
