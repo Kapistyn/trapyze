@@ -18,6 +18,11 @@ What changed in each version of traPYze. The newest is at the top.
   (`trapyze schedule remove-all`) and leave your traPYze folder alone.
 - The project on GitHub: tests on Windows, macOS and Linux for every change, and
   releases built automatically from a tag.
+- Fixed on Windows: traPYze now takes its port for itself, so a second program (or
+  a second traPYze) can't end up answering in its place.
+- Fixed on Windows: looking for WSL folders no longer fails when WSL isn't set up.
+- Fixed on Mac and Windows: importing recognises traPYze's own folder also through
+  symlinks and short folder names.
 
 ## [0.12.0] - 2026-11-15
 
