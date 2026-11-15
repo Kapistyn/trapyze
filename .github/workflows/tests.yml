@@ -49,6 +49,7 @@ jobs:
       - name: Run the installer as a user would (old Windows PowerShell, uv not yet in its own place)
         shell: powershell
         run: |
+          Remove-Item Env:UV_TOOL_DIR, Env:UV_TOOL_BIN_DIR, Env:UV_CACHE_DIR -ErrorAction SilentlyContinue  # like a normal computer
           $env:TRAPYZE_WHEEL = (Resolve-Path dist\*.whl).Path
           $env:TRAPYZE_NO_OPEN = "1"
           powershell -NoProfile -ExecutionPolicy Bypass -File installer\install.ps1
@@ -62,6 +63,7 @@ jobs:
       - name: Running it again (an update) also works
         shell: powershell
         run: |
+          Remove-Item Env:UV_TOOL_DIR, Env:UV_TOOL_BIN_DIR, Env:UV_CACHE_DIR -ErrorAction SilentlyContinue  # like a normal computer
           $env:TRAPYZE_WHEEL = (Resolve-Path dist\*.whl).Path
           $env:TRAPYZE_NO_OPEN = "1"
           powershell -NoProfile -ExecutionPolicy Bypass -File installer\install.ps1
