@@ -238,6 +238,7 @@ class Vault:
         self._data = {"connections": {}, "allowed": {}}
         self._meta = {"version": VERSION, "kdf": {"name": "scrypt", **SCRYPT}, "salt": _b64(salt), "created": _now()}
         self._save()
+        self.touch()  # a new vault is open and in use, not idle since the computer started
 
     def unlock(self, pin: str) -> None:
         if not self.exists():

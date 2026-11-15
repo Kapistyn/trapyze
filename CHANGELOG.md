@@ -21,6 +21,8 @@ What changed in each version of traPYze. The newest is at the top.
 - Fixed on Windows: traPYze now takes its port for itself, so a second program (or
   a second traPYze) can't end up answering in its place.
 - Fixed on Windows: looking for WSL folders no longer fails when WSL isn't set up.
+- Fixed: a newly made vault could lock itself at the next click on a computer that
+  had been on for a while.
 - Fixed on Mac and Windows: importing recognises traPYze's own folder also through
   symlinks and short folder names.
 

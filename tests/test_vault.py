@@ -19,6 +19,13 @@ PIN = "482915"
 
 
 class VaultTests(unittest.TestCase):
+    def test_a_new_vault_counts_as_just_used(self):
+        # Before: the idle clock started at 0, so on a computer that had been on for a while
+        # a new vault looked idle for hours and locked at the next click.
+        self.vault.create(PIN)
+        self.assertTrue(self.vault.unlocked)
+        self.assertLess(self.vault.idle_seconds(), 5)
+
     def setUp(self):
         self.dir = Path(tempfile.mkdtemp(prefix="tz-vault-"))
         self.home = Home(self.dir)
