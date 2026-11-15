@@ -70,10 +70,11 @@ if ($open) {
 
 # 4. Install ------------------------------------------------------------------
 Say "Installing traPYze (the first time takes a minute or two)..."
-$ErrorActionPreference = 'Continue'   # uv writes its progress to stderr; that isn't an error
+# From here on only programs run (uv, traPYze). They write progress and notes to stderr,
+# which Windows PowerShell 5.1 would otherwise treat as fatal; their exit codes say how it went.
+$ErrorActionPreference = 'Continue'
 $out = & $uv tool install --reinstall --python 3.12 "trapyze[desktop] @ $source" 2>&1
 $code = $LASTEXITCODE
-$ErrorActionPreference = 'Stop'
 $out | ForEach-Object { Write-Host "  $_" }
 if ($code -ne 0) {
     if (($out | Out-String) -match 'os error 448') {
@@ -84,15 +85,16 @@ if ($code -ne 0) {
     }
     Fail "Installing traPYze didn't work; the lines above say why."
 }
-& $uv tool update-shell *> $null
-$bin = (& $uv tool dir --bin).Trim()
+& $uv tool update-shell *> $null   # puts traPYze on the PATH; "already in PATH" is fine
+$bin = ((& $uv tool dir --bin 2>$null) | Select-Object -Last 1).ToString().Trim()
 $trapyze = Join-Path $bin 'trapyze.exe'
 if (-not (Test-Path $trapyze)) { Fail "traPYze was installed but can't be found in $bin." }
 
 # 5. Shortcuts, then open it ----------------------------------------------------
 & $trapyze shortcut
+if ($LASTEXITCODE -ne 0) { Say "The shortcuts couldn't be made; start traPYze with: trapyze open" }
 Write-Host ""
 Write-Host "  Done. traPYze is opening; next time, use the shortcut on your desktop." -ForegroundColor Green
 Write-Host "  Your tools live in: $env:USERPROFILE\Trapyze"
 Write-Host ""
-Start-Process (Join-Path $bin 'trapyze-app.exe')
+if (-not $env:TRAPYZE_NO_OPEN) { Start-Process (Join-Path $bin 'trapyze-app.exe') }

@@ -37,3 +37,49 @@ jobs:
       - name: Shell scripts parse
         shell: bash
         run: for f in installer/*.sh; do sh -n "$f" && echo "$f parses"; done
+
+  install-windows:
+    name: real install · Windows PowerShell 5.1
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Build this version
+        run: uv build --wheel --out-dir dist
+      - name: Run the installer as a user would (old Windows PowerShell, uv not yet in its own place)
+        shell: powershell
+        run: |
+          $env:TRAPYZE_WHEEL = (Resolve-Path dist\*.whl).Path
+          $env:TRAPYZE_NO_OPEN = "1"
+          powershell -NoProfile -ExecutionPolicy Bypass -File installer\install.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: traPYze is there and answers
+        shell: powershell
+        run: |
+          & "$env:USERPROFILE\.local\bin\trapyze.exe" version
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          if (-not (Test-Path ([Environment]::GetFolderPath('Desktop') + '\traPYze.lnk'))) { Write-Error "no desktop shortcut"; exit 1 }
+      - name: Running it again (an update) also works
+        shell: powershell
+        run: |
+          $env:TRAPYZE_WHEEL = (Resolve-Path dist\*.whl).Path
+          $env:TRAPYZE_NO_OPEN = "1"
+          powershell -NoProfile -ExecutionPolicy Bypass -File installer\install.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  install-unix:
+    name: real install · ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Build this version
+        run: uv build --wheel --out-dir dist
+      - name: Run the installer as a user would
+        run: |
+          TRAPYZE_WHEEL="$(ls "$PWD"/dist/*.whl)" TRAPYZE_NO_OPEN=1 sh installer/install.sh
+          "$(uv tool dir --bin)/trapyze" version

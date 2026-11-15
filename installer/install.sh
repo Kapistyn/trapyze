@@ -49,4 +49,4 @@ BIN=$("$UV" tool dir --bin)
 # 4. Add it to the apps, then open it
 "$BIN/trapyze" shortcut || true
 printf '\n  Done. traPYze is opening. Your tools live in %s/Trapyze\n\n' "$HOME"
-nohup "$BIN/trapyze-app" >/dev/null 2>&1 &
+[ -n "${TRAPYZE_NO_OPEN:-}" ] || nohup "$BIN/trapyze-app" >/dev/null 2>&1 &

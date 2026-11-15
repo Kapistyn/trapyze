@@ -2,6 +2,14 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.13.2] - 2026-11-15
+
+- The Windows installer no longer stops at the very end with a red
+  "NativeCommandError" in Windows PowerShell 5.1, when uv merely notes that its
+  folder is already in the PATH. traPYze was installed; the shortcuts weren't made.
+- Every change now runs the real installers on GitHub's Windows (PowerShell 5.1),
+  Mac and Linux machines, twice: a first install and an update.
+
 ## [0.13.1] - 2026-11-15
 
 - The Windows installer now always uses the official uv. Before, it could borrow a
