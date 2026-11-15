@@ -152,7 +152,7 @@ class DesktopTests(unittest.TestCase):
         d = dk.Desktop(self.home, "auto", webview=wv, pystray=tray, open_browser=lambda u: None)
         self.assertEqual(d.mode, "window")
         t, result = self.start(d)
-        self.assertTrue(wait_for(lambda: tray.icons))
+        self.assertTrue(wait_for(lambda: tray.icons and wv.windows))
         win, icon = wv.windows[0], tray.icons[0]
         self.assertTrue(win.url.startswith("http://127.0.0.1:") and "?t=" in win.url)
         self.assertEqual(win.kw["min_size"], (820, 600))
@@ -193,8 +193,10 @@ class DesktopTests(unittest.TestCase):
         wv = fake_webview()
         d = dk.Desktop(self.home, "window", webview=wv, pystray=None, open_browser=lambda u: None)
         t, result = self.start(d)
+        self.assertTrue(wait_for(lambda: wv.windows))
         win = wv.windows[0]
         slow = d.app.start("slow", {})
+        self.assertTrue(wait_for(lambda: slow.run.running))
         win.answer = False
         win.click_close()
         self.assertFalse(win.closed.is_set())
@@ -211,6 +213,7 @@ class DesktopTests(unittest.TestCase):
         t, result = self.start(d)
         self.assertTrue(wait_for(lambda: opened))
         self.assertIn("?t=", opened[0])
+        self.assertTrue(wait_for(lambda: tray.icons))
         icon = tray.icons[0]
         self.assertNotIn("Open in the browser", icon.menu.texts())
         icon.menu.click("Open traPYze")  # no window: opens the browser again

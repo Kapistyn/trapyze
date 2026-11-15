@@ -37,8 +37,12 @@ uv run trapyze open                          # try your change
 
 1. Put the new version in `pyproject.toml` and `src/trapyze/__init__.py`.
 2. Add a section for it at the top of `CHANGELOG.md`.
-3. Commit, then tag and push: `git tag v0.13.0 && git push origin v0.13.0`.
+3. Commit and push, then start the release in one of three ways: push a tag
+   (`git tag v0.13.0 && git push origin v0.13.0`), push to the release branch
+   (`git push origin main:release`), or press *Run workflow* on the Actions
+   tab, under *release*.
 
-The release workflow tests, builds the wheel and traPYze-Setup.exe, and
-publishes them with the install scripts. Every traPYze out there then offers
+The release workflow checks the version, tests, builds the wheel and
+traPYze-Setup.exe, makes the tag if needed, and publishes them with the
+install scripts. A version that is already out is never published twice. Every traPYze out there then offers
 the update by itself.

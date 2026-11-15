@@ -1,22 +1,51 @@
 name: release
 
-# Push a tag like v0.13.0 (matching the version in pyproject.toml) to publish a release:
-# the wheel, traPYze-Setup.exe for Windows, the install scripts and the notes from CHANGELOG.md.
+# Publishes a release: the wheel, traPYze-Setup.exe for Windows, the install scripts and the
+# notes from CHANGELOG.md. Three ways to start it, all using the version in pyproject.toml:
+#   - push a tag like v0.13.0 (it must match that version)
+#   - push to the "release" branch:  git push origin main:release
+#   - the "Run workflow" button on the Actions tab
+# The tag is made here when it doesn't exist yet. A version that is already out is never
+# published twice: put the new version in pyproject.toml first.
 on:
   push:
     tags: ["v*"]
+    branches: [release]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  build:
+  version:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Which version
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then tag="$GITHUB_REF_NAME"; else
+            tag="v$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')"; fi
+          python3 tools/release.py check "$tag"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::$tag is already released. Put the new version in pyproject.toml and CHANGELOG.md first."
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Releasing $tag"
+
+  build:
+    needs: version
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ needs.version.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - name: Check the tag matches the version
-        run: python3 tools/release.py check "$GITHUB_REF_NAME"
       - name: Point everything at this repository
         run: python3 tools/set_repo.py "$GITHUB_REPOSITORY"
       - name: Test
@@ -25,7 +54,7 @@ jobs:
         run: uv build --wheel --out-dir dist
       - name: Release notes and install scripts
         run: |
-          python3 tools/release.py notes "$GITHUB_REF_NAME" "$GITHUB_REPOSITORY" > notes.md
+          python3 tools/release.py notes "$TAG" "$GITHUB_REPOSITORY" > notes.md
           cp installer/install.ps1 installer/install.sh installer/uninstall.ps1 installer/uninstall.sh dist/
       - uses: actions/upload-artifact@v4
         with: { name: dist, path: dist/ }
@@ -33,7 +62,10 @@ jobs:
         with: { name: notes, path: notes.md }
 
   windows-setup:
+    needs: version
     runs-on: windows-latest
+    env:
+      TAG: ${{ needs.version.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
       - name: Point everything at this repository
@@ -42,20 +74,23 @@ jobs:
         run: choco install innosetup -y --no-progress
       - name: Build traPYze-Setup.exe
         run: |
-          $v = "$env:GITHUB_REF_NAME".TrimStart("v")
+          $v = "$env:TAG".TrimStart("v")
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$v" installer\windows\trapyze.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with: { name: setup, path: dist/traPYze-Setup.exe }
 
   publish:
-    needs: [build, windows-setup]
+    needs: [version, build, windows-setup]
     runs-on: ubuntu-latest
+    env:
+      TAG: ${{ needs.version.outputs.tag }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/download-artifact@v4
         with: { path: out }
       - name: Publish the release
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" out/dist/* out/setup/traPYze-Setup.exe \
-            --repo "$GITHUB_REPOSITORY" --title "traPYze ${GITHUB_REF_NAME#v}" --notes-file out/notes/notes.md
+          gh release create "$TAG" out/dist/* out/setup/traPYze-Setup.exe \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "traPYze ${TAG#v}" --notes-file out/notes/notes.md --latest
