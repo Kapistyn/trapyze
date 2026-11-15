@@ -221,7 +221,7 @@ class Desktop:
         self.server.server_close()
         try:
             info = json.loads(_instance_file(self.home).read_text(encoding="utf-8"))
-            if info.get("pid") == os.getpid() and int(info.get("port") or 0) == self.server.server_address[1]:
+            if info.get("pid") == os.getpid() and info.get("token") == self.app.token:
                 _instance_file(self.home).unlink()  # only our own note, not a newer traPYze's
         except (OSError, ValueError):
             pass
