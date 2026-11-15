@@ -267,11 +267,14 @@ class DesktopTests(unittest.TestCase):
             # Idle: the older one closes and the new one starts.
             wv2, tray2 = fake_webview(), fake_pystray()
             result = {}
-            with mock.patch.object(dk, "load_webview", return_value=wv2), mock.patch.object(dk, "load_pystray", return_value=tray2):
-                t_new = threading.Thread(target=lambda: result.setdefault("code", dk.open_app(self.home, "auto", console=False)), daemon=True)
-                t_new.start()
-                t_old.join(20)
-                self.assertFalse(t_old.is_alive())
+            # The stand-ins stay in place until the end: on a slow machine the new one may only ask for them late.
+            for patcher in (mock.patch.object(dk, "load_webview", return_value=wv2), mock.patch.object(dk, "load_pystray", return_value=tray2)):
+                patcher.start()
+                self.addCleanup(patcher.stop)
+            t_new = threading.Thread(target=lambda: result.setdefault("code", dk.open_app(self.home, "auto", console=False)), daemon=True)
+            t_new.start()
+            t_old.join(20)
+            self.assertFalse(t_old.is_alive())
         self.assertTrue(wait_for(lambda: tray2.icons and wv2.windows),
                         f"new one: returned {result!r}, alive {t_new.is_alive()}, sees {dk.find_running(self.home)!r}")
         self.assertTrue(wait_for(lambda: (dk.find_running(self.home) or {}).get("version") not in (None, "0.6.0")))
