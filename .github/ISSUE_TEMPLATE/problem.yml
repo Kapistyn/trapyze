@@ -1,0 +1,31 @@
+name: Something doesn't work
+description: Tell us what went wrong
+labels: [problem]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: traPYze version
+      description: Shown under Look and feel, Updates (or run `trapyze version`)
+    validations:
+      required: true
+  - type: dropdown
+    id: system
+    attributes:
+      label: Computer
+      options: [Windows, macOS, Linux, Windows with WSL]
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: The log (optional)
+      description: From Outputs, the run, Show the log. Remove anything private first.
+      render: text

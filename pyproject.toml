@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trapyze"
+version = "0.13.0"
+description = "Run your Python tools without the technical bits."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "traPYze contributors" }]
+dependencies = ["cryptography>=42"]
+
+[project.optional-dependencies]
+# Its own window and a tray icon. Without these, traPYze opens in the browser.
+desktop = ["pywebview>=5", "pystray>=0.19", "Pillow>=10"]
+
+[project.scripts]
+trapyze = "trapyze.cli:main"
+
+[project.gui-scripts]
+trapyze-app = "trapyze.desktop:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+trapyze = ["resources/helper/*.py", "resources/examples/*.py", "resources/templates/*.py", "web/static/*"]

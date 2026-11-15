@@ -1,0 +1,198 @@
+import os
+os.environ.setdefault("TRAPYZE_NO_UPDATE_CHECK", "1")  # never ask GitHub during tests
+import http.client
+import json
+import shutil
+import sys
+import tempfile
+import threading
+import time
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+from trapyze import Home  # noqa: E402
+from trapyze.web.server import make_server  # noqa: E402
+
+
+class WebTests(unittest.TestCase):
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp(prefix="tz-web-"))
+        self.home = Home(self.dir)
+        self.home.init()
+        self.server, self.app = make_server(self.home, port=0)
+        self.port = self.server.server_address[1]
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+
+    def tearDown(self):
+        for live in list(self.app.runs.values()):
+            live.run.cancel()
+            live.run.wait(10)
+        self.server.shutdown()
+        self.server.server_close()
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def request(self, method, path, body=None, token=True, host=None):
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=30)
+        headers = {"Host": host or f"127.0.0.1:{self.port}", "Content-Type": "application/json"}
+        if token:
+            headers["X-Trapyze-Token"] = self.app.token
+        conn.request(method, path, body=json.dumps(body) if body is not None else None, headers=headers)
+        res = conn.getresponse()
+        raw = res.read()
+        conn.close()
+        try:
+            return res.status, json.loads(raw)
+        except ValueError:
+            return res.status, raw.decode("utf-8", "replace")
+
+    def wait_done(self, run_id, timeout=30):
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            status, data = self.request("GET", f"/api/runs/{run_id}")
+            if not data["running"] and data["result"]:
+                return data["result"]
+            time.sleep(0.1)
+        self.fail("run did not finish")
+
+    def test_safety_checks(self):
+        self.assertEqual(self.request("GET", "/api/tools", token=False)[0], 403)
+        self.assertEqual(self.request("GET", "/api/tools", host="evil.example:80")[0], 403)
+        self.assertEqual(self.request("GET", "/", token=False)[0], 403)
+        status, page = self.request("GET", f"/?t={self.app.token}", token=False)
+        self.assertEqual(status, 200)
+        self.assertIn(self.app.token, page)
+        self.assertEqual(self.request("GET", "/static/../server.py")[0], 404)
+        status, data = self.request("POST", "/api/open", {"path": "/etc/passwd"})
+        self.assertEqual(status, 400)
+        self.assertIn("only opens files inside", data["error"])
+
+    def test_tools_list(self):
+        status, data = self.request("GET", "/api/tools")
+        self.assertEqual(status, 200)
+        names = [t["name"] for t in data["tools"]]
+        self.assertEqual(names, ["Demo price data", "Price report", "Say hello"])
+        hello = data["tools"][2]
+        self.assertEqual([s["key"] for s in hello["settings"]], ["name", "times", "shout"])
+        self.assertIsNone(hello["last"])
+
+    def test_run_stream_and_history(self):
+        status, run = self.request("POST", "/api/runs", {"tool": "say_hello", "settings": {"times": "2", "name": "Ada"}})
+        self.assertEqual(status, 201, run)
+        # Follow the event stream to the end, like the browser does.
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=30)
+        conn.request("GET", f"/api/runs/{run['run_id']}/events?t={self.app.token}", headers={"Host": f"127.0.0.1:{self.port}"})
+        res = conn.getresponse()
+        self.assertEqual(res.getheader("Content-Type"), "text/event-stream; charset=utf-8")
+        events = []
+        for raw in res:
+            line = raw.decode("utf-8").strip()
+            if line.startswith("data: "):
+                events.append(json.loads(line[6:]))
+        conn.close()
+        kinds = [e["kind"] for e in events]
+        self.assertEqual(kinds[0], "started")
+        self.assertEqual(kinds[-1], "finished")
+        self.assertEqual(events[-1]["result"]["status"], "done")
+        self.assertEqual(events[-1]["result"]["files"], ["greeting.txt"])
+        # The tool now shows its last run and remembers the chosen settings.
+        tools = self.request("GET", "/api/tools")[1]["tools"]
+        hello = next(t for t in tools if t["id"] == "say_hello")
+        self.assertEqual(hello["last"]["status"], "done")
+        self.assertEqual(hello["remembered"], {"times": "2", "name": "Ada"})
+        runs = self.request("GET", "/api/history")[1]["runs"]
+        self.assertEqual(runs[0]["tool_id"], "say_hello")
+        log = self.request("GET", f"/api/runs/{run['run_id']}/log")[1]["log"]
+        self.assertIn("Wrote 2 greetings", log)
+
+    def test_late_joiner_gets_the_whole_story(self):
+        run = self.request("POST", "/api/runs", {"tool": "say_hello", "settings": {"times": "1"}})[1]
+        self.wait_done(run["run_id"])
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        conn.request("GET", f"/api/runs/{run['run_id']}/events?t={self.app.token}&after=0", headers={"Host": f"127.0.0.1:{self.port}"})
+        body = conn.getresponse().read().decode("utf-8")
+        conn.close()
+        self.assertIn('"kind": "started"', body)
+        self.assertIn('"kind": "finished"', body)
+
+    def test_bad_settings_are_listed(self):
+        status, data = self.request("POST", "/api/runs", {"tool": "say_hello", "settings": {"times": "50", "shout": "maybe"}})
+        self.assertEqual(status, 400)
+        self.assertEqual(len(data["problems"]), 2)
+        self.assertIn("How many greetings must be between 1 and 10.", data["problems"])
+
+    def test_stop(self):
+        (self.home.scripts / "slow.py").write_text("import time\nfor i in range(60):\n    print(i, flush=True)\n    time.sleep(1)\n")
+        run = self.request("POST", "/api/runs", {"tool": "slow", "settings": {}})[1]
+        time.sleep(0.8)
+        self.assertEqual(self.request("GET", "/api/active")[1]["runs"][0]["run_id"], run["run_id"])
+        self.assertEqual(self.request("POST", f"/api/runs/{run['run_id']}/stop")[0], 200)
+        self.assertEqual(self.wait_done(run["run_id"], timeout=10)["status"], "stopped")
+
+    def test_busy_shared_data(self):
+        (self.home.scripts / "writer.py").write_text(
+            '# /// script\n# [tool.trapyze]\n# writes = ["data/x.db"]\n# ///\nimport time\ntime.sleep(3)\n')
+        first = self.request("POST", "/api/runs", {"tool": "writer", "settings": {}})
+        self.assertEqual(first[0], 201)
+        second = self.request("POST", "/api/runs", {"tool": "writer", "settings": {}})
+        self.assertEqual(second[0], 409)
+        self.assertIn("still writing", second[1]["error"])
+
+    def test_vault_flow_unlock_allow_and_masking(self):
+        (self.home.scripts / "uses_key.py").write_text(
+            '# /// script\n# [tool.trapyze]\n# connections = ["fmp"]\n# ///\n'
+            'import os\nprint("key:", os.environ["FMP_API_KEY"])\n')
+        # No vault yet: a plain explanation.
+        status, data = self.request("POST", "/api/runs", {"tool": "uses_key", "settings": {}})
+        self.assertEqual(status, 400)
+        self.assertIn("no vault yet", data["error"])
+        self.assertEqual(self.request("POST", "/api/vault/create", {"pin": "123"})[0], 400)
+        state = self.request("POST", "/api/vault/create", {"pin": "917364"})[1]
+        self.assertTrue(state["exists"] and state["unlocked"])
+        status, data = self.request("POST", "/api/runs", {"tool": "uses_key", "settings": {}})
+        self.assertIn("isn't set up yet", data["error"])
+        state = self.request("POST", "/api/connections/save", {
+            "name": "fmp", "kind": "api_key", "values": {"FMP_API_KEY": "secret-value-123"},
+            "secret": ["FMP_API_KEY"], "scheduled": True})[1]
+        self.assertEqual(state["connections"][0]["variables"][0]["value"], None)  # never sent back
+        # Locked: the browser is asked for the PIN.
+        self.request("POST", "/api/vault/lock", {})
+        status, data = self.request("POST", "/api/runs", {"tool": "uses_key", "settings": {}})
+        self.assertEqual((status, data["need"]), (423, "unlock"))
+        status, data = self.request("POST", "/api/vault/unlock", {"pin": "000000"})
+        self.assertEqual(status, 403)
+        self.assertEqual(self.request("POST", "/api/vault/unlock", {"pin": "917364"})[0], 200)
+        # First use: permission needed, then allowed.
+        status, data = self.request("POST", "/api/runs", {"tool": "uses_key", "settings": {}})
+        self.assertEqual((status, data["need"], data["connections"]), (428, "allow", ["fmp"]))
+        status, run = self.request("POST", "/api/runs", {"tool": "uses_key", "settings": {}, "allow": True})
+        self.assertEqual(status, 201)
+        result = self.wait_done(run["run_id"])
+        self.assertEqual(result["status"], "done")
+        log = self.request("GET", f"/api/runs/{run['run_id']}/log")[1]["log"]
+        self.assertIn("key: ••••••", log)
+        self.assertNotIn("secret-value-123", log)
+        # Allowed now: no question the second time.
+        self.assertEqual(self.request("POST", "/api/runs", {"tool": "uses_key", "settings": {}})[0], 201)
+        connections = self.request("GET", "/api/vault")[1]["connections"]
+        self.assertEqual(connections[0]["allowed"], ["uses_key"])
+
+    def test_env_import(self):
+        env = self.dir / "old.env"
+        env.write_text("SERVICE_TOKEN=tok_abc_999\nREGION=eu\n")
+        self.request("POST", "/api/vault/create", {"pin": "917364"})
+        preview = self.request("POST", "/api/connections/preview-env", {"path": str(env)})[1]
+        self.assertEqual(preview["variables"], [{"name": "SERVICE_TOKEN", "secret": True, "set": True}, {"name": "REGION", "secret": False, "set": True}])
+        state = self.request("POST", "/api/connections/save", {
+            "name": "old", "kind": "custom", "values": {"SERVICE_TOKEN": None, "REGION": None},
+            "secret": ["SERVICE_TOKEN"], "scheduled": True, "import_path": str(env)})[1]
+        variables = state["connections"][0]["variables"]
+        self.assertEqual(variables[0], {"name": "SERVICE_TOKEN", "secret": True, "value": None, "set": True})
+        self.assertEqual(variables[1]["value"], "eu")
+        self.assertEqual(self.app.vault.values("old")["SERVICE_TOKEN"], "tok_abc_999")
+
+
+if __name__ == "__main__":
+    unittest.main()

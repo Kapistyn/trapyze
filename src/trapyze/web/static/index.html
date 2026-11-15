@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="trapyze-token" content="__TRAPYZE_TOKEN__">
+<title>traPYze</title>
+<link rel="icon" href="/static/favicon.png" type="image/png">
+  <link rel="alternate icon" href="/static/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<div id="app" class="app">
+  <nav class="side" aria-label="Main">
+    <div class="brand" aria-label="traPYze">
+      <svg width="30" height="30" viewBox="0 0 28 28" fill="none" aria-hidden="true"><path d="M9 3L6 17M19 3l3 14M3 17h22" stroke="#2747C7" stroke-width="2.4" stroke-linecap="round"/><path d="M9 23c3 2 7 2 10 0" stroke="#C4661A" stroke-width="2.4" stroke-linecap="round"/></svg>
+      <span>tra<span class="py">PY</span>ze</span>
+    </div>
+    <button type="button" class="nav" data-view="tools" aria-current="page"><span class="ico" data-icon="grid"></span>Tools</button>
+    <button type="button" class="nav" data-view="outputs"><span class="ico" data-icon="folder"></span>Outputs</button>
+    <button type="button" class="nav" data-view="schedule"><span class="ico" data-icon="calendar"></span>Schedule</button>
+    <button type="button" class="nav" data-view="connections"><span class="ico" data-icon="plug"></span>Connections</button>
+    <div class="side-foot">
+      <button type="button" class="nav" data-view="looks"><span class="ico" data-icon="palette"></span>Look and feel</button>
+      <div id="vault-chip" hidden></div>
+      <div id="running-chip" class="running-chip" hidden></div>
+    </div>
+  </nav>
+  <main id="main" class="main" tabindex="-1"></main>
+</div>
+<div id="modal-root"></div>
+<div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

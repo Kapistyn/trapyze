@@ -1,0 +1,10 @@
+name: An idea
+description: Something that would make traPYze better
+labels: [idea]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help, and in which situation?
+    validations:
+      required: true
