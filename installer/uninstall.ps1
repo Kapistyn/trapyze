@@ -3,8 +3,9 @@
 $ErrorActionPreference = 'Continue'
 Write-Host ""
 Write-Host "  Removing traPYze" -ForegroundColor Cyan
-$uv = (Get-Command uv -ErrorAction SilentlyContinue).Source
-if (-not $uv) { $uv = @("$env:USERPROFILE\.local\bin\uv.exe", "$env:LOCALAPPDATA\Programs\uv\uv.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1 }
+# The official uv, the one the installer used (not another program's own copy).
+$uv = @("$env:USERPROFILE\.local\bin\uv.exe", "$env:LOCALAPPDATA\Programs\uv\uv.exe", "$env:USERPROFILE\.cargo\bin\uv.exe") |
+    Where-Object { Test-Path $_ } | Select-Object -First 1
 $bin = if ($uv) { (& $uv tool dir --bin).Trim() } else { "$env:USERPROFILE\.local\bin" }
 $trapyze = Join-Path $bin 'trapyze.exe'
 

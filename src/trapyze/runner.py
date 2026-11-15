@@ -74,14 +74,28 @@ class RunResult:
         return self.status in ("done", "warning")
 
 
+def official_uv_places() -> list[Path]:
+    """Where uv's own installer puts uv (newest first). Other programs sometimes bring a copy
+    of uv of their own; those come later on the PATH and are only used when there's no other."""
+    name = "uv.exe" if os.name == "nt" else "uv"
+    places = [Path.home() / ".local" / "bin" / name]
+    if os.name == "nt" and os.environ.get("LOCALAPPDATA"):
+        places.append(Path(os.environ["LOCALAPPDATA"]) / "Programs" / "uv" / name)
+    places.append(Path.home() / ".cargo" / "bin" / name)
+    return places
+
+
 def find_engine() -> str | None:
-    """The uv executable: TRAPYZE_UV, then one bundled next to Python, then PATH."""
+    """The uv executable: TRAPYZE_UV, then one bundled next to Python, then the official uv, then PATH."""
     explicit = os.environ.get("TRAPYZE_UV")
     if explicit and Path(explicit).is_file():
         return explicit
     beside = Path(sys.executable).parent / ("uv.exe" if os.name == "nt" else "uv")
     if beside.is_file():
         return str(beside)
+    for place in official_uv_places():
+        if place.is_file():
+            return str(place)
     return shutil.which("uv")
 
 

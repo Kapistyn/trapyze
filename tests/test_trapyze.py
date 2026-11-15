@@ -3,6 +3,7 @@ import os
 import shutil
 import sys
 import tempfile
+from unittest import mock
 import textwrap
 import time
 import unittest
@@ -288,6 +289,26 @@ class RunnerTests(TempHome):
         open("args.json", "w").write(json.dumps(sys.argv[1:]))
         print(os.environ["TRAPYZE_SETTINGS"])
     ''')
+
+    def test_engine_prefers_the_official_uv(self):
+        # Another program's own copy of uv on the PATH (here: "hermes") is only a last resort.
+        from trapyze import runner
+        fake_home = Path(tempfile.mkdtemp(prefix="tz-uvhome-"))
+        try:
+            name = "uv.exe" if os.name == "nt" else "uv"
+            other = fake_home / "hermes" / "bin" / name
+            other.parent.mkdir(parents=True)
+            other.write_text("")
+            with mock.patch.dict(os.environ, {"TRAPYZE_UV": ""}), mock.patch.object(Path, "home", return_value=fake_home), \
+                 mock.patch.object(runner.shutil, "which", return_value=str(other)), \
+                 mock.patch.object(runner.sys, "executable", str(fake_home / "venv" / "python")):
+                self.assertEqual(runner.find_engine(), str(other))  # nothing better: use it
+                official = fake_home / ".local" / "bin" / name
+                official.parent.mkdir(parents=True)
+                official.write_text("")
+                self.assertEqual(runner.find_engine(), str(official))
+        finally:
+            shutil.rmtree(fake_home, ignore_errors=True)
 
     def test_commands_switches_and_only_for(self):
         tool = read_tool(self.script("pit.py", self.COMMAND_TOOL))

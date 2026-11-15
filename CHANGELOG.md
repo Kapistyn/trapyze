@@ -2,6 +2,15 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.13.1] - 2026-11-15
+
+- The Windows installer now always uses the official uv. Before, it could borrow a
+  copy of uv that another program brought along (an AI agent, an editor); on some
+  computers that stopped the install with "os error 448".
+- traPYze itself also prefers the official uv over such copies when running tools.
+- The installer says so when it runs as administrator, and explains error 448 in
+  plain words if Windows still blocks the install.
+
 ## [0.13.0] - 2026-11-15
 
 **traPYze gets a home online.**

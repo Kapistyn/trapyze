@@ -26,15 +26,24 @@ Write-Host "  traPYze installer" -ForegroundColor Cyan
 Write-Host ""
 
 # 1. uv ---------------------------------------------------------------------
-$uv = (Get-Command uv -ErrorAction SilentlyContinue).Source
+# Only the official uv, in its own place. Other programs (AI agents, editors) sometimes bring
+# a copy of uv of their own; borrowing that one can fail in odd ways, so it's never used.
+$admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+    [Security.Principal.WindowsBuiltInRole]::Administrator)
+if ($admin) {
+    Say "Note: this window runs as administrator. traPYze installs for your own account;"
+    Say "if the install fails, run it again in a normal PowerShell window."
+}
+$official = @("$env:USERPROFILE\.local\bin\uv.exe", "$env:LOCALAPPDATA\Programs\uv\uv.exe", "$env:USERPROFILE\.cargo\bin\uv.exe")
+$uv = $official | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $uv) {
+    $other = (Get-Command uv -ErrorAction SilentlyContinue).Source
+    if ($other) { Say "Found a uv that belongs to another program ($other); installing traPYze's own." }
     Say "Installing uv, which runs Python for traPYze (about 30 MB)..."
     try {
-        $env:UV_NO_MODIFY_PATH = $null
         Invoke-RestMethod https://astral.sh/uv/install.ps1 | Invoke-Expression
     } catch { Fail "uv couldn't be installed: $($_.Exception.Message)" }
-    $uv = @("$env:USERPROFILE\.local\bin\uv.exe", "$env:LOCALAPPDATA\Programs\uv\uv.exe") |
-        Where-Object { Test-Path $_ } | Select-Object -First 1
+    $uv = $official | Where-Object { Test-Path $_ } | Select-Object -First 1
     if (-not $uv) { Fail "uv was installed but can't be found. Close this window, open a new PowerShell and try again." }
 }
 Say "Using uv at $uv"
@@ -61,8 +70,20 @@ if ($open) {
 
 # 4. Install ------------------------------------------------------------------
 Say "Installing traPYze (the first time takes a minute or two)..."
-& $uv tool install --reinstall --python 3.12 "trapyze[desktop] @ $source"
-if ($LASTEXITCODE -ne 0) { Fail "Installing traPYze didn't work; the lines above say why." }
+$ErrorActionPreference = 'Continue'   # uv writes its progress to stderr; that isn't an error
+$out = & $uv tool install --reinstall --python 3.12 "trapyze[desktop] @ $source" 2>&1
+$code = $LASTEXITCODE
+$ErrorActionPreference = 'Stop'
+$out | ForEach-Object { Write-Host "  $_" }
+if ($code -ne 0) {
+    if (($out | Out-String) -match 'os error 448') {
+        Fail ("Windows blocked a folder link that uv uses for Python (error 448: 'untrusted mount point'). " +
+              "This happens when the window runs with different rights than the account that made the link: " +
+              "as administrator, or with rights changed by a virus scanner. Open a normal PowerShell window " +
+              "(not as administrator) and run the installer again.")
+    }
+    Fail "Installing traPYze didn't work; the lines above say why."
+}
 & $uv tool update-shell *> $null
 $bin = (& $uv tool dir --bin).Trim()
 $trapyze = Join-Path $bin 'trapyze.exe'
