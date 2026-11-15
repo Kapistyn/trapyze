@@ -72,7 +72,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     home = Home(args.home)
     if args.command in ("version", "update"):
-        return _update(home, args.command == "version" or args.check)
+        return _update(home, args.command == "version" or args.check, strict=args.command == "update")
 
     try:
         if args.command == "init":
@@ -248,7 +248,7 @@ def _run(home: Home, tool: Tool, pairs: list[str], quiet: bool, preset: str | No
     return 1
 
 
-def _update(home: Home, only_check: bool) -> int:
+def _update(home: Home, only_check: bool, strict: bool = True) -> int:
     from . import __version__
     from .desktop import ask_to_quit, find_running, launcher
     from .project import configured, RELEASES
@@ -264,7 +264,7 @@ def _update(home: Home, only_check: bool) -> int:
         st = updates.check()
     except UpdateError as exc:
         print(exc)
-        return 1
+        return 1 if strict else 0  # "version" did its job: it showed the version
     latest = st["latest"]
     if not st["available"]:
         print("That's the newest version." if latest.get("version") else "No release online yet.")
