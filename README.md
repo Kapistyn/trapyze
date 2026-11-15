@@ -220,8 +220,8 @@ flowchart LR
 
 ## Questions
 
-**Is it free?** Yes, free and open source under the MIT licence. If it saves
-you time, you can [buy me a coffee](#support).
+**Is it free?** Yes, free and open source under the MIT licence, with no ads
+and no tracking.
 
 **Do I need to know Python?** No, to use tools. A little, to write your own,
 and Ask AI helps with that.
@@ -240,15 +240,13 @@ time, tools that fetch data, Ask AI and the update check need the internet.
 **Can I run a tool from the terminal too?** Yes: `trapyze run "exchange rates"
 --set currencies=USD`. See [the guide](docs/guide.md#from-the-terminal).
 
-## Support
+## Helping
 
-traPYze is free and stays free. If it saves you time and you'd like to say
-thanks, a coffee keeps it going:
+traPYze is free and stays free. The best ways to help:
 
-<a href="https://www.buymeacoffee.com/kapistyn"><img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-%E2%98%95-ffdd00?style=for-the-badge&labelColor=333" alt="Buy me a coffee"></a>
-
-Other ways to help: ⭐ star the project, [report a problem or an idea](https://github.com/kapistyn/trapyze/issues),
-or share a tool you made (see [CONTRIBUTING.md](CONTRIBUTING.md)).
+- ⭐ **Star the project** on GitHub, so more people find it
+- [Report a problem or share an idea](https://github.com/kapistyn/trapyze/issues)
+- Share a tool you made (see [CONTRIBUTING.md](CONTRIBUTING.md))
 
 ## Documentation
 

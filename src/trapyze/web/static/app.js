@@ -1159,9 +1159,8 @@ function updateCard() {
         up.available ? h("button", { type: "button", class: "btn primary", onclick: () => openUpdate() }, `See what's new in ${up.version}`) : null,
         h("button", { type: "button", class: "btn", onclick: check }, "Look now"),
         h("span", { class: "help" }, up.error ? up.error : when ? `Last looked ${when}.` : ""))],
-    up.support ? h("p", { class: "help", style: "margin:16px 0 0" }, "traPYze is free and open source. If it saves you time, you can ",
-      h("button", { type: "button", class: "link", style: "min-height:0", onclick: () => openUrl(up.support) }, "buy its maker a coffee"), " ☕, or ",
-      h("button", { type: "button", class: "link", style: "min-height:0", onclick: () => openUrl(up.home_page) }, "star it on GitHub"), ".") : null);
+    up.online ? h("p", { class: "help", style: "margin:16px 0 0" }, "traPYze is free and open source. Like it? ",
+      h("button", { type: "button", class: "link", style: "min-height:0", onclick: () => openUrl(up.home_page) }, "Give it a star on GitHub"), ".") : null);
 }
 
 async function outputsViewLoad() {

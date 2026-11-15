@@ -320,8 +320,8 @@ class App:
     def update_info(self) -> dict[str, Any]:
         st = self.updates.state()
         latest = st.get("latest") or {}
-        from ..project import HOME_PAGE, SUPPORT
-        return {"home_page": HOME_PAGE, "support": SUPPORT, "current": st["current"], "online": st["online"], "auto": st["auto"], "available": st["available"],
+        from ..project import HOME_PAGE
+        return {"home_page": HOME_PAGE, "current": st["current"], "online": st["online"], "auto": st["auto"], "available": st["available"],
                 "version": latest.get("version"), "page": latest.get("page"), "checked": st.get("checked"),
                 "error": st.get("error")}
 
@@ -1471,8 +1471,7 @@ class Handler(BaseHTTPRequestHandler):
             body = self._body()
             url = str(body.get("url", ""))
             allowed = {u for _, u in ai_help.CHAT_SITES.values()} | {p["keys"] for p in ai_help.PROVIDERS.values()}
-            from ..project import HOME_PAGE, SUPPORT, configured
-            allowed.add(SUPPORT)
+            from ..project import HOME_PAGE, configured
             if url not in allowed and not (configured() and (url == HOME_PAGE or url.startswith(HOME_PAGE + "/"))):
                 return self._error(HTTPStatus.BAD_REQUEST, "traPYze only opens its own known web addresses.")
             import webbrowser
