@@ -270,3 +270,14 @@ class ToolRunTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class KnownServiceTests(unittest.TestCase):
+    def test_market_database_services_fill_themselves_in(self):
+        from trapyze.apis import PRESETS, check_api
+        got = {k: check_api({"preset": k, "key_var": "K"}, ["K"]) for k in ("tiingo", "hfdata", "github")}
+        self.assertEqual((got["tiingo"]["key_in"], got["tiingo"]["key_name"]), ("query", "token"))
+        self.assertEqual((got["hfdata"]["key_name"], got["hfdata"]["base"]), ("X-API-Key", "https://api.hfdatalibrary.com/v1"))
+        self.assertEqual((got["github"]["key_name"], got["github"]["key_prefix"]), ("Authorization", "Bearer "))
+        for k in got:
+            self.assertTrue(PRESETS[k]["note"] and PRESETS[k]["example"])

@@ -539,8 +539,8 @@ From the terminal, `trapyze run` asks for the PIN when a tool needs the vault.
 ## Web services: tz.api()
 
 For a data service such as Financial Modeling Prep, turn on **Use with
-tz.api()** when you add the connection. Pick the service (FMP, Alpha Vantage,
-Twelve Data, Finnhub, EODHD, Massive/Polygon, or another one) and traPYze fills
+tz.api()** when you add the connection. Pick the service (FMP, Alpha Vantage, Twelve Data, Finnhub, EODHD, Massive/Polygon, Tiingo, HF Data
+Library, GitHub, or another one; typing one of those as the connection's name picks it for you) and traPYze fills
 in its address, where the key goes and the free plan's limits. Change the
 limits if you're on a paid plan. Then, in a tool:
 

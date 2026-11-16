@@ -2,6 +2,13 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.15.3] - 2026-11-16
+
+- **Tiingo, HF Data Library and GitHub** are known services under Connections.
+  Name a connection `tiingo`, `hfdata` or `github`, paste the key, and the web
+  address, where the key goes and the limits fill themselves in. Before, their
+  settings were behind the *Use with tz.api()* switch and had to be typed by hand.
+
 ## [0.15.2] - 2026-11-16
 
 - **Updating from inside traPYze works again on Windows.** Before, traPYze could

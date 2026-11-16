@@ -58,6 +58,24 @@ PRESETS: dict[str, dict[str, Any]] = {
         "test": "v2/aggs/ticker/AAPL/prev", "example": 'tz.api("{name}", "v2/aggs/ticker/AAPL/prev")',
         "note": "Free plan: 5 calls a minute. Paid plans: no limit (set 0).",
     },
+    "tiingo": {
+        "label": "Tiingo", "base": "https://api.tiingo.com",
+        "key_in": "query", "key_name": "token", "per_minute": 1, "per_day": 900, "cache_minutes": 60,
+        "test": "api/test", "example": 'tz.api("{name}", "tiingo/daily/aapl/prices", params={{"startDate": "2024-01-02"}})',
+        "note": "Free plan: about 50 calls an hour and 1,000 a day, so one a minute keeps every tool safe.",
+    },
+    "hfdata": {
+        "label": "HF Data Library", "base": "https://api.hfdatalibrary.com/v1",
+        "key_in": "header", "key_name": "X-API-Key", "per_minute": 250, "per_day": 0, "cache_minutes": 0,
+        "test": "symbols", "example": 'tz.api("{name}", "bars/AAPL", params={{"start": "2024-01-02", "end": "2024-01-02"}})',
+        "note": "Free key, 300 calls a minute. The key expires every 30 days: paste the new one here.",
+    },
+    "github": {
+        "label": "GitHub", "base": "https://api.github.com",
+        "key_in": "header", "key_name": "Authorization", "key_prefix": "Bearer ", "per_minute": 60, "per_day": 0,
+        "cache_minutes": 0, "test": "rate_limit", "example": 'tz.api("{name}", "repos/you/repo/contents/README.md")',
+        "note": "Use a fine-grained token for only the repository it needs, with only the permissions it needs.",
+    },
     "other": {
         "label": "Another service", "base": "", "key_in": "query", "key_name": "apikey",
         "per_minute": 0, "per_day": 0, "cache_minutes": 15, "test": "",
@@ -94,7 +112,7 @@ def check_api(api: dict[str, Any] | None, variables: list[str]) -> dict[str, Any
         if not _NAME.match(key_name):
             raise VaultError("The key's name (for example apikey or X-Api-Key) uses letters, digits, - and _.")
         out["key_name"] = key_name
-        out["key_prefix"] = str(api.get("key_prefix") or "")[:20]
+        out["key_prefix"] = str(api.get("key_prefix", base.get("key_prefix", "")) or "")[:20]
         key_var = str(api.get("key_var") or "")
         if key_var not in variables:
             raise VaultError("Choose which of this connection's values is the key.")

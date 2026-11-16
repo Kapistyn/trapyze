@@ -2024,7 +2024,7 @@ function openConnection(existing, suggestedName, imported) {
   const P = S.vault.api_presets;
   function presetFor(id) {
     const p = P[id] || P.other;
-    return { preset: P[id] ? id : "other", base: p.base, key_in: p.key_in, key_name: p.key_name, key_prefix: "",
+    return { preset: P[id] ? id : "other", base: p.base, key_in: p.key_in, key_name: p.key_name, key_prefix: p.key_prefix || "",
       per_minute: p.per_minute, per_day: p.per_day, cache_minutes: p.cache_minutes, key_var: null, test: p.test || "" };
   }
   function guessApi() {  // typing "fmp" as the name switches the web-service settings on, for FMP
