@@ -2,9 +2,10 @@
 
 traPYze looks once a day for a newer release (never more often, and only when
 switched on). Updating can't happen while traPYze runs, because Windows won't
-replace a program that is in use. So traPYze writes a small update script, starts
-it on its own, and quits; the script waits for traPYze to close, installs the new
-version with uv, and starts traPYze again. Everything it does goes to update.log.
+replace a program that is in use. So traPYze starts a small updater (a Python
+script run by the base interpreter, outside traPYze), waits until it reports that
+it runs, and only then quits; the updater waits for traPYze to close, installs the
+new version with uv, and starts traPYze again. Everything it does goes to update.log.
 """
 
 from __future__ import annotations
@@ -163,42 +164,89 @@ def download_verified(internal: Path, latest: dict[str, Any], opener: Callable |
     return target
 
 
-def update_script(engine: str, wheel: str, pid: int, log: Path, restart: list[str], platform: str = sys.platform) -> tuple[str, str]:
-    """(file name, contents) of the script that waits for traPYze to close, updates it and starts it again."""
-    spec = f"trapyze[desktop] @ {wheel}"
-    if platform.startswith("win"):
-        q = lambda s: "'" + str(s).replace("'", "''") + "'"  # noqa: E731 - PowerShell single quotes
-        start = f"Start-Process -FilePath {q(restart[0])}" + (f" -ArgumentList {', '.join(q(a) for a in restart[1:])}" if restart[1:] else "")
-        return "trapyze-update.ps1", "\n".join([
-            "$ErrorActionPreference = 'Continue'",
-            f"$log = {q(log)}",
-            "function Say($t) { Add-Content -Path $log -Value ((Get-Date -Format 's') + '  ' + $t) }",
-            "Say 'Waiting for traPYze to close'",
-            f"for ($i = 0; $i -lt 120 -and (Get-Process -Id {pid} -ErrorAction SilentlyContinue); $i++) {{ Start-Sleep -Milliseconds 500 }}",
-            f"Say 'Installing {wheel}'",
-            f"$out = & {q(engine)} tool install --reinstall --python 3.12 {q(spec)} 2>&1",
-            "Add-Content -Path $log -Value ($out | Out-String)",
-            "if ($LASTEXITCODE -eq 0) { Say 'UPDATED' } else { Say ('FAILED with code ' + $LASTEXITCODE) }",
-            start,
-            "",
-        ])
-    sq = lambda s: "'" + str(s).replace("'", "'\\''") + "'"  # noqa: E731 - POSIX shell single quotes
-    return "trapyze-update.sh", "\n".join([
-        "#!/bin/sh",
-        f"log={sq(log)}",
-        'say() { echo "$(date +%Y-%m-%dT%H:%M:%S)  $1" >> "$log"; }',
-        "say 'Waiting for traPYze to close'",
-        f"i=0; while kill -0 {pid} 2>/dev/null && [ $i -lt 120 ]; do sleep 0.5; i=$((i+1)); done",
-        f"say {sq('Installing ' + wheel)}",
-        f'if {sq(engine)} tool install --reinstall --python 3.12 {sq(spec)} >> "$log" 2>&1; then say UPDATED; else say "FAILED with code $?"; fi',
-        f"nohup {' '.join(sq(a) for a in restart)} >/dev/null 2>&1 &",
-        "",
-    ])
+HELPER = r'''"""traPYze updater: waits for traPYze to close, installs the new version with uv, starts it again.
+Standard library only, run by the base Python, so nothing it needs is replaced while it works."""
+import json, os, subprocess, sys, time
+
+job = json.loads(sys.argv[1])
+log = job["log"]
+
+
+def say(text):
+    with open(log, "a", encoding="utf-8") as f:
+        f.write(time.strftime("%Y-%m-%dT%H:%M:%S") + "  " + text + "\n")
+
+
+def alive(pid):
+    if os.name == "nt":
+        import ctypes
+        k = ctypes.windll.kernel32
+        h = k.OpenProcess(0x00100000 | 0x1000, False, pid)  # SYNCHRONIZE | QUERY_LIMITED_INFORMATION
+        if not h:
+            return False
+        try:
+            return k.WaitForSingleObject(h, 0) == 0x102  # still running
+        finally:
+            k.CloseHandle(h)
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def detached(cmd, **kw):
+    if os.name != "nt":
+        return subprocess.Popen(cmd, start_new_session=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL, **kw)
+    base = 0x00000008 | 0x00000200  # detached, own process group
+    try:
+        return subprocess.Popen(cmd, creationflags=base | 0x01000000, close_fds=True, **kw)  # and out of any job
+    except OSError:
+        return subprocess.Popen(cmd, creationflags=base, close_fds=True, **kw)
+
+
+say("STARTED: waiting for traPYze to close")
+for _ in range(240):
+    if not alive(job["pid"]):
+        break
+    time.sleep(0.5)
+else:
+    say("traPYze didn't close within two minutes; updating anyway")
+say("Installing " + job["wheel"])
+flags = 0x08000000 if os.name == "nt" else 0  # no console window
+try:
+    r = subprocess.run([job["engine"], "tool", "install", "--reinstall", "--python", "3.12",
+                        "trapyze[desktop] @ " + job["wheel"]], capture_output=True, text=True,
+                       encoding="utf-8", errors="replace", creationflags=flags, timeout=900)
+    with open(log, "a", encoding="utf-8") as f:
+        f.write((r.stdout or "") + (r.stderr or ""))
+    say("UPDATED" if r.returncode == 0 else "FAILED with code %d" % r.returncode)
+except Exception as exc:
+    say("FAILED: %r" % (exc,))
+try:
+    detached(job["restart"])
+    say("Started traPYze again")
+except Exception as exc:
+    say("Couldn't start traPYze again (%r); open it from its shortcut" % (exc,))
+'''
+
+
+def helper_python() -> str:
+    """The Python that runs the updater: the base interpreter (not the one being replaced), windowless on Windows."""
+    base = Path(getattr(sys, "_base_executable", "") or sys.executable)
+    if sys.platform.startswith("win"):
+        w = base.with_name("pythonw.exe")
+        if w.exists():
+            return str(w)
+    return str(base)
 
 
 def start_update(internal: Path, engine: str | None, wheel: str, restart: list[str], pid: int | None = None,
-                 popen: Callable = subprocess.Popen) -> Path:
-    """Write the update script and start it on its own. The caller quits traPYze straight after."""
+                 popen: Callable = subprocess.Popen, python: str | None = None, wait: float = 15.0) -> Path:
+    """Start the updater on its own and wait until it says it runs. The caller quits traPYze straight after.
+
+    Raises UpdateError (and traPYze stays open) when the updater doesn't start."""
     if not engine:
         raise UpdateError("uv isn't found, so traPYze can't update itself. Run the installer again instead.")
     wheel = str(wheel or "")
@@ -207,15 +255,30 @@ def start_update(internal: Path, engine: str | None, wheel: str, restart: list[s
     internal.mkdir(parents=True, exist_ok=True)
     log = internal / "update.log"
     log.write_text("", encoding="utf-8")
-    name, text = update_script(engine, wheel, pid or os.getpid(), log, restart)
-    script = internal / name
-    script.write_text(text, encoding="utf-8")
-    if name.endswith(".ps1"):
-        flags = 0x00000008 | 0x00000200 | 0x08000000  # detached, own group, no window
-        popen(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", str(script)],
-              creationflags=flags, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    script = internal / "trapyze-update.py"
+    script.write_text(HELPER, encoding="utf-8")
+    for old in ("trapyze-update.ps1", "trapyze-update.sh"):
+        (internal / old).unlink(missing_ok=True)
+    job = json.dumps({"log": str(log), "pid": pid or os.getpid(), "engine": engine, "wheel": wheel, "restart": restart})
+    cmd = [python or helper_python(), "-I", str(script), job]
+    if sys.platform.startswith("win"):
+        base = 0x00000008 | 0x00000200  # detached, own process group
+        try:
+            popen(cmd, creationflags=base | 0x01000000, close_fds=True,  # out of any job traPYze runs in
+                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError:
+            popen(cmd, creationflags=base, close_fds=True,
+                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     else:
-        script.chmod(0o755)
-        popen(["/bin/sh", str(script)], start_new_session=True, stdin=subprocess.DEVNULL,
-              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    return script
+        popen(cmd, start_new_session=True, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+              stderr=subprocess.DEVNULL)
+    deadline = time.time() + wait
+    while time.time() < deadline:
+        try:
+            if "STARTED" in log.read_text(encoding="utf-8", errors="replace"):
+                return script
+        except OSError:
+            pass
+        time.sleep(0.2)
+    raise UpdateError("The updater didn't start, so traPYze stays open and nothing changed. "
+                      f"Run the installer from {RELEASES} instead; your tools, results and vault are kept.")

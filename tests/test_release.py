@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 import urllib.error
 from pathlib import Path
@@ -82,21 +83,36 @@ class UpdaterTests(unittest.TestCase):
             self.assertFalse(u.due(now=1_000_000 + 99 * 3600))
             self.assertTrue(u.state()["available"])  # switching the daily look off keeps what's known
 
-    def test_scripts(self):
+    def test_updater_runs(self):
+        """The real updater: waits for 'traPYze' to close, runs uv, starts traPYze again, logs every step."""
+        if sys.platform.startswith("win"):
+            self.skipTest("uses POSIX fake programs")
+        fake_uv = self.dir / "uv"
+        fake_uv.write_text("#!/bin/sh\necho \"uv $*\"\n")
+        fake_uv.chmod(0o755)
+        marker = self.dir / "restarted"
+        app = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(1.5)"])
+        updater.start_update(self.dir, str(fake_uv), "https://x/t.whl",
+                             [sys.executable, "-c", f"open({str(marker)!r}, 'w').write('yes')"], pid=app.pid,
+                             python=sys.executable)
+        app.wait()
         log = self.dir / "update.log"
-        name, ps = updater.update_script(r"C:\Users\o'neil\.local\bin\uv.exe", "https://x/t.whl", 4242, log,
-                                         [r"C:\venv\pythonw.exe", "-m", "trapyze.desktop"], platform="win32")
-        self.assertEqual(name, "trapyze-update.ps1")
-        self.assertIn("Get-Process -Id 4242", ps)
-        self.assertIn("'C:\\Users\\o''neil\\.local\\bin\\uv.exe' tool install --reinstall --python 3.12 'trapyze[desktop] @ https://x/t.whl'", ps)
-        self.assertIn("Start-Process -FilePath 'C:\\venv\\pythonw.exe' -ArgumentList '-m', 'trapyze.desktop'", ps)
-        name, sh = updater.update_script("/home/a/.local/bin/uv", "https://x/t.whl", 4242, log, ["/v/python", "-m", "trapyze.desktop"], platform="linux")
-        self.assertEqual(name, "trapyze-update.sh")
-        self.assertIn("kill -0 4242", sh)
-        if shutil.which("sh"):
-            p = self.dir / "t.sh"
-            p.write_text(sh)
-            self.assertEqual(subprocess.run(["sh", "-n", str(p)]).returncode, 0)
+        for _ in range(100):
+            if marker.exists() and "Started traPYze again" in log.read_text():
+                break
+            time.sleep(0.1)
+        text = log.read_text()
+        for words in ("STARTED", "Installing https://x/t.whl", "uv tool install --reinstall --python 3.12 trapyze[desktop] @ https://x/t.whl",
+                      "UPDATED", "Started traPYze again"):
+            self.assertIn(words, text)
+        self.assertTrue(marker.exists())
+        self.assertLess(text.index("STARTED"), text.index("UPDATED"))
+
+    def test_updater_that_doesnt_start(self):
+        """If the updater never reports in, traPYze says so and stays open (no silent quit)."""
+        with self.assertRaises(updater.UpdateError) as ctx:
+            updater.start_update(self.dir, "/uv", "https://x/t.whl", ["a"], pid=7, popen=lambda *a, **k: None, wait=0.5)
+        self.assertIn("stays open", str(ctx.exception))
 
     def test_download_is_verified(self):
         import hashlib
@@ -130,10 +146,16 @@ class UpdaterTests(unittest.TestCase):
             updater.start_update(self.dir, None, "https://x/t.whl", ["a"], popen=lambda *a, **k: calls.append(a))
         with self.assertRaises(updater.UpdateError):
             updater.start_update(self.dir, "/uv", "http://insecure/t.whl", ["a"], popen=lambda *a, **k: calls.append(a))
+
+        def popen(cmd, **k):  # pretend the helper started
+            calls.append((cmd, k))
+            (self.dir / "update.log").write_text("x  STARTED\n")
         script = updater.start_update(self.dir, "/uv", "https://x/t.whl", ["/v/python", "-m", "trapyze.desktop"], pid=7,
-                                      popen=lambda cmd, **k: calls.append((cmd, k)))
+                                      popen=popen, python="/base/python")
         self.assertTrue(script.exists())
-        self.assertIn(str(script), calls[0][0])
+        cmd = calls[0][0]
+        self.assertEqual(cmd[:3], ["/base/python", "-I", str(script)])
+        self.assertEqual(json.loads(cmd[3])["restart"], ["/v/python", "-m", "trapyze.desktop"])
 
 
 class ReleaseToolTests(unittest.TestCase):

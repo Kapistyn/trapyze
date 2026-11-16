@@ -2,6 +2,17 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.15.2] - 2026-11-16
+
+- **Updating from inside traPYze works again on Windows.** Before, traPYze could
+  close for the update and then nothing happened: the update didn't run, and
+  traPYze didn't open again. The updater is now a small Python helper instead of a
+  hidden PowerShell script, and traPYze only closes once the helper reports that
+  it's running. If it doesn't, traPYze stays open and says so.
+- The update notice asks GitHub again before installing, and when it's opened
+  more than an hour after the last look. So on a day with several releases it no
+  longer offers an older one.
+
 ## [0.15.1] - 2026-11-16
 
 - Two tools that complete the Everyday files pack: **Set duplicates aside** moves

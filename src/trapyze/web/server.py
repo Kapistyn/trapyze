@@ -333,7 +333,10 @@ class App:
                 "error": st.get("error")}
 
     def install_update(self) -> dict[str, Any]:
-        st = self.updates.state()
+        try:
+            st = self.updates.check()  # ask GitHub now: what was found this morning may not be the newest
+        except UpdateError:
+            st = self.updates.state()
         if not st["available"]:
             raise UpdateError("There's no newer version to install.")
         with self.lock:
@@ -1344,6 +1347,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(HTTPStatus.OK, app.tools())
         if method == "GET" and parts == ["update"]:
             st = app.updates.state()
+            if st["online"] and time.time() - float(st.get("checked") or 0) > 3600:
+                try:  # opening the notice: show the newest, not what was found hours ago
+                    st = app.updates.check()
+                except UpdateError:
+                    pass
             return self._json(HTTPStatus.OK, {**app.update_info(), "notes": (st.get("latest") or {}).get("notes", "")})
         if method == "POST" and parts[0] == "update" and len(parts) == 2:
             try:
