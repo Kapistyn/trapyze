@@ -229,8 +229,15 @@ They work without the internet and use only what comes with Python.
   you're happy. A file is never overwritten: a second `photo.jpg` becomes
   `photo (2).jpg`.
 - *Find duplicate files* compares contents, not names, and only makes a list.
+- *Set duplicates aside* keeps one of each set (the one nearest the top of the
+  folder) and moves the extra copies to a folder called "Duplicates set aside",
+  in the same subfolders they came from. Nothing is deleted; you remove that
+  folder yourself when you're sure.
 - *Back up a folder* makes a dated zip in another place and keeps the newest few.
   A good one to plan weekly.
+- *Restore a backup* checks that a backup zip is complete, and unpacks it into a
+  new folder. Switch on *Only check the backup* to test a backup without
+  unpacking it.
 - *Rename files* gives tidy names (date first, numbered, or lowercase without
   spaces), again with a list first.
 - *What takes the space?* lists the biggest files and subfolders.

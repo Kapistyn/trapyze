@@ -169,7 +169,7 @@ without the internet and need nothing installed:
 
 | Pack | Tools |
 |---|---|
-| **Everyday files** | Tidy a folder · Find duplicate files · Back up a folder · Rename files · What takes the space? |
+| **Everyday files** | Tidy a folder · Find duplicate files · Set duplicates aside · Back up a folder · Restore a backup · Rename files · What takes the space? |
 | **Home finance** | Bank statement overview by category and month · Find subscriptions |
 | **Tables and data** | Check a download · Merge CSV files · CSV into a database · Database table to CSV |
 

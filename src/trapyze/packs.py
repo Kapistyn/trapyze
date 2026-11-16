@@ -19,7 +19,8 @@ from .label import LabelError, read_tool
 ROOT = Path(__file__).parent / "resources" / "packs"
 PACKS: list[dict[str, Any]] = [
     {"id": "everyday_files", "name": "Everyday files", "icon": "archive",
-     "description": "Tidy a folder, find duplicates, make backups, rename files and see what takes the space. "
+     "description": "Tidy a folder, find duplicates and set them aside, make and restore backups, rename files and see what "
+                    "takes the space. "
                     "The tools that change files show a list first and never delete or overwrite anything of yours."},
     {"id": "home_finance", "name": "Home finance", "icon": "coin",
      "description": "Turn the CSV export from your bank into a monthly overview by category, and find the "

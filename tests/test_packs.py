@@ -65,7 +65,7 @@ class PackTests(unittest.TestCase):
         return (Path(result.output_dir) / name).read_text(encoding="utf-8-sig")
 
     def test_every_tool_is_healthy_offline_and_standard_library_only(self):
-        self.assertEqual(len(self.tools), 11)
+        self.assertEqual(len(self.tools), 13)
         for t in self.tools.values():
             self.assertEqual(t.dependencies, [], t.name)  # nothing to install: works without the internet
             source = t.path.read_text(encoding="utf-8")
@@ -126,6 +126,19 @@ class PackTests(unittest.TestCase):
         self.assertEqual(r.status, "done", log)
         self.assertIn("sub", self.out(r, "biggest-folders.csv"))
 
+        r, log = self.run_tool("Set duplicates aside", folder=self.work)
+        self.assertTrue((self.work / "sub" / "copy.bin").exists())  # a list first
+        r, log = self.run_tool("Set duplicates aside", folder=self.work, really_move="true")
+        self.assertEqual(r.status, "done", log)
+        self.assertTrue((self.work / "one.bin").exists())  # the copy nearest the top stays
+        aside = self.work / "Duplicates set aside" / "sub" / "copy.bin"
+        self.assertEqual(aside.read_bytes(), b"x" * 20000)
+        self.assertFalse((self.work / "sub" / "copy.bin").exists())
+        r, log = self.run_tool("Set duplicates aside", folder=self.work, really_move="true")
+        self.assertIn("Moved 0 extra copies", log)  # what was set aside isn't looked at again
+        aside.rename(self.work / "sub" / "copy.bin")
+        shutil.rmtree(self.work / "Duplicates set aside")
+
         target = self.dir / "backups"
         target.mkdir()
         (target / "keep-me.zip").write_text("someone else's file")
@@ -139,6 +152,21 @@ class PackTests(unittest.TestCase):
         with zipfile.ZipFile(zips[-1]) as z:
             self.assertEqual(sorted(z.namelist()), ["one.bin", "other.bin", "sub/copy.bin"])
         r, log = self.run_tool("Back up a folder", folder=self.work, target=self.work / "sub")
+        self.assertEqual(r.status, "failed")
+
+        (self.work / "one.bin").write_bytes(b"changed since the backup")
+        r, log = self.run_tool("Restore a backup", backup=zips[-1], target=self.dir, only_check="true")
+        self.assertEqual(r.status, "done", log)
+        self.assertIn("3 files", log)
+        self.assertEqual(list(self.dir.glob("* restored*")), [])
+        for expected in (f"{zips[-1].stem} restored", f"{zips[-1].stem} restored (2)"):
+            r, log = self.run_tool("Restore a backup", backup=zips[-1], target=self.dir)
+            self.assertEqual(r.status, "done", log)
+            self.assertEqual((self.dir / expected / "sub" / "copy.bin").read_bytes(), b"x" * 20000)
+        self.assertEqual((self.work / "one.bin").read_bytes(), b"changed since the backup")  # current files untouched
+        notzip = self.dir / "broken.zip"
+        notzip.write_bytes(zips[-1].read_bytes()[:200])
+        r, log = self.run_tool("Restore a backup", backup=notzip, target=self.dir)
         self.assertEqual(r.status, "failed")
 
     def test_home_finance_reads_different_banks(self):

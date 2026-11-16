@@ -2,6 +2,14 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.15.1] - 2026-11-16
+
+- Two tools that complete the Everyday files pack: **Set duplicates aside** moves
+  the extra copies of identical files to a folder you can check (nothing is
+  deleted), and **Restore a backup** checks a backup zip and unpacks it into a
+  new folder, never over your current files. If you added the pack before, *Get
+  tools* offers "Add the missing tools".
+
 ## [0.15.0] - 2026-11-16
 
 **Ready-made tools.**
