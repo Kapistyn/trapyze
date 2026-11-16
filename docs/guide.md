@@ -22,6 +22,7 @@ Everything traPYze does, step by step. New here? Start with the [README](../READ
 - [Web services: tz.api()](#web-services-tzapi)
 - [Inside the script](#inside-the-script)
 - [Prompt for AI-written tools](#prompt-for-ai-written-tools)
+- [Before the first run](#before-the-first-run)
 - [What's in it](#whats-in-it)
 
 ## Install, update, remove
@@ -543,19 +544,67 @@ its output folder.
 
 ## Prompt for AI-written tools
 
-Paste this into any AI chat, followed by what you want the tool to do:
+An AI chat doesn't know traPYze. Without help it writes a plain script that asks
+questions in a terminal; with the prompt below it writes a tool with its label,
+settings and progress in place.
 
-> Write this as a single-file traPYze tool. Start the file with a PEP 723
-> block (`# /// script` … `# ///`) listing `requires-python` and all
-> `dependencies`, plus a `[tool.trapyze]` section with `name`, `description`,
-> `version` and one `[[tool.trapyze.settings]]` entry per option the user may
-> change (`key`, `label`, `type`, `default`, and `min`/`max`/`options` where
-> they apply). In the code, `import trapyze_helper as tz`, read options with
-> `tz.settings()`, report progress with `tz.progress(fraction, "what it's doing
-> in plain words")`, and save every result with `tz.output_path(name)`. Never
-> ask for input with `input()`, and never hard-code paths or API keys. For a
-> web service, list its connection name under `connections = [...]` in the
-> label and call it with `tz.api(name, path, params={...})`, which adds the key.
+**The easy way:** *New tool*, then **Have an AI write it**. Describe the tool in a
+sentence or two. traPYze copies the prompt with your description and opens your
+chat site (or asks the built-in AI, if you set up a key). Paste the answer back:
+traPYze checks the script, shows what it wants to do, and puts it on the New shelf.
+
+**By hand:** paste this into any AI chat, followed by what you want the tool to do.
+*New tool* also has a **Copy the prompt** button for it.
+
+<!-- prompt:start -->
+````text
+You help someone who is not a programmer with a Python script that runs in traPYze, a desktop
+launcher for Python tools. Answer in plain, friendly English; explain any technical word you use.
+
+How a traPYze tool works:
+- The file starts with a PEP 723 block (`# /// script` … `# ///`) listing `requires-python` and all
+  `dependencies`, plus a `[tool.trapyze]` section with `name`, `description`, `version`, and one
+  `[[tool.trapyze.settings]]` entry per option the user may change (`key`, `label`, `type` = text, int,
+  float, bool, choice, date, file or folder, `default`, and `min`/`max`/`options` where they apply).
+- In the code: `import trapyze_helper as tz`; read options with `tz.settings()`; report progress with
+  `tz.progress(fraction, "what it's doing in plain words")`; save results with `tz.output_path(name)`;
+  shared data files go in `tz.data_path(name)` and are listed as `writes = [...]` in the label.
+- Never use `input()`. Never hard-code paths or keys. Keys come from the vault: list the connection
+  name under `connections = [...]` in the label and read it from `os.environ`, or call a web service
+  with `tz.api(name, path, params={...})`, which adds the key.
+- Values shown as •••• were masked by traPYze because they are secret. Never invent them; read them
+  from the environment instead.
+
+Write a new tool as ONE Python file. First say in two or three sentences what it does and what the
+user must set up (for example a key under Connections), then give the COMPLETE script in one
+```python block. Use only packages that are really needed and list every one under `dependencies`.
+Put a clear `name` and `description` in the label, and choose an `icon` (one of: chart, table, mail,
+cloud, coin, trend, archive, bell, globe, photo, gauge, target, rocket, heart, cube, database) and a
+`color` (one of: blue, teal, purple, orange, rose, slate).
+
+The tool I want:
+````
+<!-- prompt:end -->
+
+A tool an AI wrote, like a tool you imported, waits for one look before its first
+run; see [Before the first run](#before-the-first-run).
+
+## Before the first run
+
+A tool is a program: it can do anything you can do on your computer, and traPYze
+has no sandbox around it. So a tool you **imported** or that **an AI wrote** doesn't
+run straight away. The first time you press Run, traPYze shows:
+
+- where it came from
+- what it wants to do: use the internet, use keys from your vault, delete files,
+  start other programs, use a fixed folder outside traPYze, change shared data
+- what the health check found
+
+Choose **I've looked, run it** and it runs like any other tool from then on. Until
+then it can't be planned or run in a chain either. Tools you make from a template or
+write yourself in the scripts folder never ask.
+
+Only run tools from people you trust. When in doubt: *Ask AI, Explain it*.
 
 ## What's in it
 

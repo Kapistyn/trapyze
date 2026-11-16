@@ -253,7 +253,7 @@ def _update(home: Home, only_check: bool, strict: bool = True) -> int:
     from .desktop import ask_to_quit, find_running, launcher
     from .project import configured, RELEASES
     from .runner import find_engine
-    from .updater import UpdateError, Updates, start_update
+    from .updater import UpdateError, Updates, download_verified, start_update
 
     print(f"traPYze {__version__}")
     if not configured():
@@ -273,6 +273,11 @@ def _update(home: Home, only_check: bool, strict: bool = True) -> int:
     if only_check:
         print("Install it with: trapyze update")
         return 0
+    try:
+        wheel = download_verified(home.internal, latest)  # before closing anything
+    except UpdateError as exc:
+        print(exc)
+        return 1
     running = find_running(home)
     if running:
         if running.get("busy"):
@@ -282,7 +287,7 @@ def _update(home: Home, only_check: bool, strict: bool = True) -> int:
         print("Closed the open traPYze window.")
     target, args = launcher()
     try:
-        start_update(home.internal, find_engine(), latest["wheel"], [target, *args])
+        start_update(home.internal, find_engine(), str(wheel), [target, *args])
     except UpdateError as exc:
         print(exc)
         return 1

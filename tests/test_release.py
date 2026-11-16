@@ -98,6 +98,32 @@ class UpdaterTests(unittest.TestCase):
             p.write_text(sh)
             self.assertEqual(subprocess.run(["sh", "-n", str(p)]).returncode, 0)
 
+    def test_download_is_verified(self):
+        import hashlib
+        wheel = b"pretend wheel"
+        name = "trapyze-99.0.0-py3-none-any.whl"
+        good = f"{hashlib.sha256(wheel).hexdigest()}  {name}\n{'0' * 64}  install.ps1\n".encode()
+
+        def serve(sums):
+            def opener_(req, timeout=None):
+                return Resp(sums if req.full_url.endswith("SHA256SUMS") else wheel)
+            return opener_
+        latest = {"wheel": f"https://x/{name}", "sums": "https://x/SHA256SUMS"}
+        path = updater.download_verified(self.dir, latest, serve(good))
+        self.assertEqual((path.name, path.read_bytes()), (name, wheel))
+        for sums, words in ((good.replace(hashlib.sha256(wheel).hexdigest().encode(), b"1" * 64), "doesn't match"),
+                            (b"", "don't mention")):
+            with self.assertRaises(updater.UpdateError) as ctx:
+                updater.download_verified(self.dir, latest, serve(sums))
+            self.assertIn(words, str(ctx.exception))
+        self.assertEqual(list((self.dir / "update").glob("*.whl")), [path])  # a refused file is never written
+        with self.assertRaises(updater.UpdateError):
+            updater.download_verified(self.dir, {"wheel": latest["wheel"], "sums": None}, serve(good))
+        with self.assertRaises(updater.UpdateError):
+            updater.download_verified(self.dir, {"wheel": "https://x/../evil.whl", "sums": latest["sums"]}, serve(good))
+        with self.assertRaises(updater.UpdateError):
+            updater.download_verified(self.dir, {"wheel": "http://x/" + name, "sums": latest["sums"]}, serve(good))
+
     def test_start_update(self):
         calls = []
         with self.assertRaises(updater.UpdateError):
@@ -181,10 +207,15 @@ class UpdateWebTests(_web.WebTests):
             self.assertEqual(status, 400)  # can't close itself in this test
             quit_calls = []
             self.app.quit_hook = lambda: quit_calls.append(1)
-            with mock.patch("trapyze.web.server.start_update") as started:
+            status, data = self.request("POST", "/api/update/install", {})
+            self.assertEqual(status, 400)  # this release has no checksums: never installed unverified
+            self.assertIn("checksums", data["error"])
+            with mock.patch("trapyze.web.server.start_update") as started, \
+                 mock.patch("trapyze.web.server.download_verified", return_value=Path("/x/trapyze-99.0.0-py3-none-any.whl")) as got:
                 status, data = self.request("POST", "/api/update/install", {})
             self.assertEqual((status, data.get("version")), (200, "99.0.0"))
-            self.assertEqual(started.call_args[0][2], "https://x/trapyze-99.0.0-py3-none-any.whl")
+            self.assertEqual(got.call_args[0][1]["wheel"], "https://x/trapyze-99.0.0-py3-none-any.whl")
+            self.assertEqual(started.call_args[0][2], str(Path("/x/trapyze-99.0.0-py3-none-any.whl")))
             status, data = self.request("POST", "/api/update/auto", {"on": False})
             self.assertFalse(data["auto"])
 

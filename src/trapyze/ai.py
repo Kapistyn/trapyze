@@ -80,6 +80,52 @@ give the COMPLETE new script in one ```python block. Keep everything that alread
 valid, and change nothing that wasn't asked for."""
 
 
+NEW_RULE = """
+Write a new tool as ONE Python file. First say in two or three sentences what it does and what the
+user must set up (for example a key under Connections), then give the COMPLETE script in one
+```python block. Use only packages that are really needed and list every one under `dependencies`.
+Put a clear `name` and `description` in the label, and choose an `icon` (one of: chart, table, mail,
+cloud, coin, trend, archive, bell, globe, photo, gauge, target, rocket, heart, cube, database) and a
+`color` (one of: blue, teal, purple, orange, rose, slate)."""
+
+
+def write_prompt() -> str:
+    """The text to paste into any AI chat, before describing the tool you want."""
+    return (RULES + NEW_RULE).strip() + "\n\nThe tool I want:"
+
+
+def build_new(description: str) -> dict[str, Any]:
+    description = str(description or "").strip()
+    if len(description) < 8:
+        raise AIError("Describe in a sentence or two what the tool should do.")
+    if len(description) > 6000:
+        raise AIError("That description is very long. Keep it to the main points.")
+    system = RULES + NEW_RULE
+    return {"system": system, "user": "The tool I want:\n" + description, "text": write_prompt() + "\n" + description, "masked": 0}
+
+
+def check_new(code: str, scratch: Path) -> tuple[Any, list[str]]:
+    """(the tool as read from its label, or None; plain-English problems) for a script that isn't saved yet."""
+    problems = []
+    try:
+        compile(code, "new_tool.py", "exec")
+    except SyntaxError as exc:
+        problems.append(f"Python can't read it (line {exc.lineno}: {exc.msg}). Ask the AI to fix that line.")
+    scratch.mkdir(parents=True, exist_ok=True)
+    tmp = scratch / "new_tool.py"
+    tmp.write_text(code, encoding="utf-8")
+    tool = None
+    try:
+        tool = read_tool(tmp)
+    except LabelError as exc:
+        problems.append(f"Its label has a problem: {exc}")
+    except (OSError, ValueError) as exc:
+        problems.append(f"Its label couldn't be read: {exc}")
+    if "# [tool.trapyze]" not in code:
+        problems.append("It has no traPYze label, so it would get no settings window. Ask the AI to add the label.")
+    return tool, problems
+
+
 class AIError(Exception):
     """A plain-English problem with the AI service."""
 

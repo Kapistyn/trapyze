@@ -91,6 +91,8 @@ jobs:
         with: { path: out }
       - name: Publish the release
         run: |
-          gh release create "$TAG" out/dist/* out/setup/traPYze-Setup.exe \
+          mkdir rel && cp out/dist/* out/setup/traPYze-Setup.exe rel/
+          (cd rel && sha256sum * > SHA256SUMS && cat SHA256SUMS)
+          gh release create "$TAG" rel/* \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "traPYze ${TAG#v}" --notes-file out/notes/notes.md --latest

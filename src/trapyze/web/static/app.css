@@ -561,3 +561,14 @@ h3.sub { font-size: 14px; margin: 18px 0 4px; letter-spacing: .01em; }
 .ai-ready { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 14px; border-radius: 12px; background: var(--good-soft); margin-top: 8px; font-size: 14px; }
 .ai-model { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
 .ai-model select { height: 36px; max-width: 280px; }
+
+/* ---------- AI-written tools and the first look (0.14) ---------- */
+.nt-ai { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; margin: 4px 0 14px; border: 1px dashed var(--accent); border-radius: 12px; background: var(--accent-soft); color: var(--ink); text-align: left; }
+.nt-ai > span:nth-child(2) { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.nt-ai small { color: var(--sub); font-size: 12.5px; }
+.nt-ai:hover { border-style: solid; }
+.nt-go { display: inline-flex; color: var(--accent-ink); }
+.aw-card { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
+.aw-card strong { font-size: 16px; }
+.aw-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: 14.5px; }
+.notice.review ul { margin: 4px 0 0; padding-left: 20px; }

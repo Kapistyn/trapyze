@@ -746,7 +746,10 @@ def run_here(home, plan: dict[str, Any], at: dt.datetime, how: str = "background
     tools = {t.id: t for t in home.tools()[0]}
 
     def start(tool_id: str, chosen: dict[str, Any]) -> Run:
+        from .review import Reviews
         tool = tools[tool_id]
+        if Reviews(home.internal).pending(tool.id):
+            raise StoreError(f"{tool.name} is new here and waits for a look. Run it once yourself in traPYze first.")
         env, secret = secrets_for(vault, tool.id, tool.name, tool.connections, unattended=True)
         return Run(home, tool, chosen, extra_env=env, secrets=secret).start()
 

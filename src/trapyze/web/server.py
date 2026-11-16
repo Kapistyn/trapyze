@@ -13,6 +13,7 @@ import datetime
 import json
 import mimetypes
 import os
+import re
 import socket
 import secrets
 import subprocess
@@ -40,7 +41,8 @@ from ..templates import KINDS as TEMPLATE_KINDS, make as make_tool
 from ..versions import Versions, diff_lines
 from .. import ai as ai_help
 from ..ai import AIError, AISettings
-from ..updater import UpdateError, Updates, start_update
+from ..updater import UpdateError, Updates, download_verified, start_update
+from ..review import NeedsReview, ORIGINS, Reviews, wants as tool_wants
 from ..layout import Layout, item_texts, suggest as suggest_shelf, suggest_chain, topics
 from ..store import ICONS, Chain, ChainRun, Chains, Looks, Presets, Step, StoreError, step_settings
 from ..label import LabelError, SettingError, Tool
@@ -123,6 +125,7 @@ class App:
         self.versions = Versions(home.internal)
         self.ai = AISettings(home.internal)
         self.updates = Updates(home.internal)
+        self.reviews = Reviews(home.internal)
         self.quit_hook = None  # set by whoever runs the server: closes traPYze
         self._update_notice()
         self._health_cache: dict[tuple[str, float], list[dict]] = {}
@@ -157,6 +160,7 @@ class App:
         free = disk_free(self.home.outputs)
         self.track_versions(tools)
         kinds = self.suggestions(tools)
+        pending = self.reviews.all()
         out = []
         for t in tools:
             item = self._tool_json(t, last.get(t.id), remembered.get(t.id), running.get(t.id))
@@ -169,6 +173,7 @@ class App:
             item["reads"] = t.reads
             item["kind"] = kinds.get(f"tool:{t.id}", "")
             item["health"] = health_summary(self.health(t))
+            item["review"] = bool(pending.get(t.id))
             item["changes"] = self.versions.count(t.id)
             item["path"] = str(t.path)
             item["packages"] = self.packages.summary(t) if t.dependencies or (t.path.with_name(t.path.name + ".lock")).exists() else None
@@ -337,9 +342,73 @@ class App:
             raise UpdateError("This traPYze can't close itself. Close it, and run the installer again.")
         from ..desktop import launcher
         target, args = launcher()
-        start_update(self.home.internal, find_engine(), st["latest"]["wheel"], [target, *args])
+        wheel = download_verified(self.home.internal, st["latest"])  # refuses a file that doesn't match its checksum
+        start_update(self.home.internal, find_engine(), str(wheel), [target, *args])
         threading.Timer(0.8, self.quit_hook).start()
         return {"version": st["latest"]["version"]}
+
+    # A look before the first run ----------------------------------------------
+    def review_info(self, tool_id: str) -> dict[str, Any]:
+        tool = self.find_tool(tool_id)
+        found = self.health(tool)
+        try:
+            source = tool.path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            source = ""
+        origin = self.reviews.pending(tool.id) or ""
+        return {"tool": tool.id, "origin": ORIGINS.get(origin, ""), "wants": tool_wants(tool, source, found),
+                "findings": [f for f in found if f["level"] != "info"], "summary": health_summary(found)}
+
+    # Writing a new tool with AI ----------------------------------------------
+    def ai_new_proposal(self, answer: str) -> dict[str, Any]:
+        code = ai_help.extract_code(answer)
+        if code is None:
+            raise AIError("There's no complete script in that answer. Paste the whole answer, including the part "
+                          "between ```python and ```.")
+        tool, problems = ai_help.check_new(code, self.home.internal / "ai-check")
+        findings: list[dict[str, Any]] = []
+        wanted: list[str] = []
+        if tool is not None:
+            try:
+                findings = health_check(tool, code)
+                wanted = tool_wants(tool, code, findings)
+            except (OSError, ValueError):
+                pass
+            (self.home.internal / "ai-check" / "new_tool.py").unlink(missing_ok=True)
+        return {"code": code, "name": tool.name if tool else "", "description": tool.description if tool else "",
+                "problems": problems, "findings": [f for f in findings if f["level"] != "info"], "wants": wanted,
+                "lines": code.count("\n")}
+
+    def ai_new_ask(self, description: str) -> dict[str, Any]:
+        st = self.ai.get()
+        if not st["connection"]:
+            raise AIError("Add a key for an AI service first, under Look and feel, AI help, or use copy and paste.")
+        q = ai_help.build_new(description)
+        key = self._ai_key(st["connection"])
+        with ai_help._busy:
+            answer = ai_help.ask(st["provider"], key, st["model"], q["system"], q["user"])
+        answer, _ = ai_help.mask(answer, [key])
+        return {"answer": answer, "proposal": self.ai_new_proposal(answer),
+                "model": st["model"], "provider": ai_help.PROVIDERS[st["provider"]]["name"]}
+
+    def ai_new_save(self, code: str) -> dict[str, Any]:
+        tool, problems = ai_help.check_new(code, self.home.internal / "ai-check")
+        (self.home.internal / "ai-check" / "new_tool.py").unlink(missing_ok=True)
+        if tool is None:
+            raise AIError(problems[0] if problems else "The script couldn't be read.")
+        stem = re.sub(r"[^a-z0-9]+", "_", tool.name.lower()).strip("_")[:50] or "ai_tool"
+        path, n = self.home.scripts / f"{stem}.py", 2
+        while path.exists():
+            path, n = self.home.scripts / f"{stem}_{n}.py", n + 1
+        path.write_text(code, encoding="utf-8")
+        tools = self.home.tools()[0]
+        made = next((t for t in tools if t.path == path), None)
+        if made is None:
+            path.unlink(missing_ok=True)
+            raise AIError("The new tool couldn't be read after saving (is its name already used by another tool?).")
+        self.reviews.mark([made.id], "ai")
+        self.track_versions(tools)
+        return {"id": made.id, "name": made.name}
 
     # AI help -----------------------------------------------------------------
     def ai_info(self) -> dict[str, Any]:
@@ -536,6 +605,8 @@ class App:
     def start(self, tool_id: str, chosen: dict[str, Any], allow: bool = False, in_chain: bool = False,
               unattended: bool = False) -> LiveRun:
         tool = self.home.find(tool_id)
+        if self.reviews.pending(tool.id):
+            raise NeedsReview(tool.id, tool.name)
         tool.resolve(chosen)  # check settings before asking for the PIN or permission
         env: dict[str, str] = {}
         secret: list[str] = []
@@ -601,6 +672,9 @@ class App:
                     unattended: bool = False) -> ChainRun:
         """Check everything a chain needs before its first step starts, then run it."""
         tools = {t.id: t for t in self.home.tools()[0]}
+        for step in chain.steps:
+            if step.tool in tools and self.reviews.pending(step.tool):
+                raise NeedsReview(step.tool, tools[step.tool].name)
         problems: list[str] = []
         for i, step in enumerate(chain.steps):
             tool = tools.get(step.tool)
@@ -723,6 +797,8 @@ class App:
 
     def save_plan(self, body: dict[str, Any]) -> dict[str, Any]:
         tools = self.home.tools()[0]
+        if body.get("target_kind") == "tool" and self.reviews.pending(str(body.get("target"))):
+            raise StoreError("Run this tool once yourself first: it's new here and waits for a look before its first run.")
         warnings: list[str] = []
         # Permission for connections is given now, while someone is here.
         if body.get("target_kind") == "tool":
@@ -1209,6 +1285,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(HTTPStatus.LOCKED, str(exc), need="unlock")
             except NeedsPermission as exc:
                 return self._error(HTTPStatus.PRECONDITION_REQUIRED, str(exc), need="allow", connections=exc.names)
+            except NeedsReview as exc:
+                return self._error(HTTPStatus.PRECONDITION_REQUIRED, str(exc), need="review", review=app.review_info(exc.tool_id))
             except (StoreError, VaultError, LookupError, LabelError, ValueError) as exc:
                 return self._error(HTTPStatus.BAD_REQUEST, str(exc))
             return self._json(HTTPStatus.OK, app.tools())
@@ -1251,6 +1329,9 @@ class Handler(BaseHTTPRequestHandler):
                                                   "summary": app.packages.summary(tool)})
             except (PackageProblem, LookupError, OSError) as exc:
                 return self._error(HTTPStatus.BAD_REQUEST, str(exc))
+        if method == "POST" and parts == ["review", "accept"]:
+            app.reviews.accept(str(self._body().get("tool", "")))
+            return self._json(HTTPStatus.OK, app.tools())
         if method == "GET" and parts == ["update"]:
             st = app.updates.state()
             return self._json(HTTPStatus.OK, {**app.update_info(), "notes": (st.get("latest") or {}).get("notes", "")})
@@ -1284,6 +1365,17 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(HTTPStatus.OK, app.ai_info())
                 if parts[1] == "models":
                     return self._json(HTTPStatus.OK, app.ai_models())
+                if parts[1] == "write-prompt":
+                    return self._json(HTTPStatus.OK, {"prompt": ai_help.write_prompt()})
+                if parts[1] == "new-prompt":
+                    return self._json(HTTPStatus.OK, {"prompt": ai_help.build_new(str(body.get("description", "")))["text"]})
+                if parts[1] == "new-ask":
+                    return self._json(HTTPStatus.OK, app.ai_new_ask(str(body.get("description", ""))))
+                if parts[1] == "new-proposal":
+                    return self._json(HTTPStatus.OK, {"proposal": app.ai_new_proposal(str(body.get("answer", "")))})
+                if parts[1] == "new-save":
+                    result = app.ai_new_save(str(body.get("code", "")))
+                    return self._json(HTTPStatus.OK, {**app.tools(), "result": result})
                 if parts[1] == "prompt":
                     _, q, _ = app.ai_question(body)
                     return self._json(HTTPStatus.OK, {"prompt": q["text"], "masked": q["masked"]})
@@ -1372,7 +1464,9 @@ class Handler(BaseHTTPRequestHandler):
                 body = self._body()
                 if parts[1] == "scan":
                     return self._json(HTTPStatus.OK, scan_import(str(body.get("path", "")), app.home))
+                before = {t.id for t in app.home.tools()[0]}
                 report = do_import(str(body.get("path", "")), app.home, dict(body.get("choices") or {}))
+                app.reviews.mark([t.id for t in app.home.tools()[0] if t.id not in before], "imported")
                 return self._json(HTTPStatus.OK, {"report": report, **app.tools()})
             except (ImportProblem, OSError, ValueError) as exc:
                 return self._error(HTTPStatus.BAD_REQUEST, str(exc))
@@ -1436,6 +1530,8 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 body = self._body()
                 live = app.start(str(body.get("tool", "")), dict(body.get("settings") or {}), allow=bool(body.get("allow")))
+            except NeedsReview as exc:
+                return self._error(HTTPStatus.PRECONDITION_REQUIRED, str(exc), need="review", review=app.review_info(exc.tool_id))
             except SettingError as exc:
                 return self._error(HTTPStatus.BAD_REQUEST, "Some settings need a look.", problems=str(exc).splitlines())
             except NeedsUnlock as exc:

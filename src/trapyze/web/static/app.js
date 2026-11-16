@@ -211,6 +211,7 @@ function toolsView() {
       h("button", { type: "button", class: "btn primary", onclick: () => openImport() }, h("span", { html: ICON.plus }), "Import"),
       h("button", { type: "button", class: "btn icon-only", "aria-label": "More", title: "More", onclick: (e) => openMenu(e.currentTarget, [
         { label: "New tool from a template…", run: () => openNewTool() },
+        { label: "Have an AI write a tool…", run: () => openAIWrite() },
         { label: "Open the scripts folder", run: () => openPath(S.home + "/scripts") },
         S.tools.length > 1 ? { label: "New chain…", run: () => openChainEditor(null) } : null,
         { sep: true },
@@ -387,6 +388,7 @@ function itemState(it) {
     if (live && live.running) return ["run", "Running" + (live.fraction != null ? ` · ${Math.round(live.fraction * 100)}%` : "")];
     if (t.last && (t.last.status === "failed" || t.last.status === "stopped")) return ["bad", t.last.status === "failed" ? "Had a problem last time" : "Was stopped last time"];
     if (t.health && t.health.level === "bad") return ["bad", "The health check found a problem"];
+    if (t.review) return [null, "New here: waits for a look before its first run"];
     if ((t.checks || []).some((c) => c.code === "old" || c.code === "missing")) return ["warn", "Its data needs updating"];
     if (t.last && t.last.status === "warning") return ["warn", "Finished with warnings last time"];
   }
@@ -833,6 +835,7 @@ const NEW_KINDS = [
   ["apps", "App", "cube", "A small program with its own window"],
 ];
 function openNewTool(kind) {
+  if (kind === "ai") return openAIWrite();
   let name = "", desc = "", choice = kind || "collect", open = true, error = "", busy = false;
   const dialog = h("section", { class: "dialog", role: "dialog", "aria-modal": "true", "aria-labelledby": "nt-title" });
   async function make() {
@@ -857,6 +860,9 @@ function openNewTool(kind) {
           h("div", { class: "nt-kinds", role: "radiogroup", "aria-labelledby": "nt-kind" }, NEW_KINDS.map(([k, label, ico, hint]) =>
             h("button", { type: "button", role: "radio", class: "nt-kind", "aria-checked": String(choice === k), onclick: () => { choice = k; draw(); } },
               h("span", { class: "nt-ico", html: ICON[ico] || ICON.grid }), h("strong", {}, label), h("small", {}, hint))))),
+        h("button", { type: "button", class: "nt-ai", onclick: () => { closeModal(); openAIWrite(desc || name); } },
+          h("span", { class: "nt-ico", html: ICON.bolt }), h("span", {}, h("strong", {}, "Or have an AI write it"),
+            h("small", {}, "Describe what you want; an AI chat writes the whole tool, ready for traPYze.")), h("span", { html: ICON.arrow, class: "nt-go" })),
         h("label", { class: "field" }, h("span", { class: "lbl" }, "Description ", h("span", { class: "muted" }, "(optional)")),
           h("input", { type: "text", class: "input", value: desc, maxlength: "200", placeholder: "What it's for, in one line",
             oninput: (e) => { desc = e.target.value; } })),
@@ -869,6 +875,118 @@ function openNewTool(kind) {
     input.addEventListener("input", () => { dialog.querySelector(".btn.primary").disabled = !name.trim(); });
   }
   draw(); showModal(dialog);
+}
+
+function openAIWrite(start) {
+  const st = { desc: start || "", mode: null, site: null, stage: "ask", busy: false, error: "", prompt: "", pasted: "", answer: "", p: null, copied: false, via: "" };
+  const dialog = h("section", { class: "dialog wide", role: "dialog", "aria-modal": "true", "aria-labelledby": "aw-title" });
+  const info = () => S.ai || { ready: false, chat_sites: {}, providers: {}, settings: {} };
+  const siteName = () => (info().chat_sites[st.site] || {}).name || "the chat";
+  const fail = (e) => {
+    if (e.data && e.data.need === "unlock") { closeModal(); openUnlock(() => openAIWrite(st.desc)); return; }
+    st.error = e.message; st.busy = false; draw();
+  };
+  async function go() {
+    st.error = "";
+    if (st.desc.trim().length < 8) { st.error = "Describe in a sentence or two what the tool should do."; return draw(); }
+    st.busy = true; draw();
+    try {
+      if (st.mode === "here") {
+        const r = await api("ai/new-ask", { method: "POST", body: { description: st.desc } });
+        Object.assign(st, { answer: r.answer, p: r.proposal, stage: "result", via: `${r.provider} · ${r.model}` });
+      } else {
+        const r = await api("ai/new-prompt", { method: "POST", body: { description: st.desc } });
+        st.prompt = r.prompt; st.copied = await copyText(r.prompt);
+        await api("ai/settings", { method: "POST", body: { chat_site: st.site } }).then((x) => { S.ai = x; }).catch(() => {});
+        await openUrl(info().chat_sites[st.site].url);
+        st.stage = "paste";
+      }
+      st.busy = false; draw();
+    } catch (e) { fail(e); }
+  }
+  async function readPasted() {
+    st.error = ""; st.busy = true; draw();
+    try { st.p = (await api("ai/new-proposal", { method: "POST", body: { answer: st.pasted } })).proposal; st.answer = st.pasted; st.stage = "result"; }
+    catch (e) { st.error = e.message; }
+    st.busy = false; draw();
+  }
+  async function save() {
+    st.busy = true; draw();
+    try {
+      const r = await api("ai/new-save", { method: "POST", body: { code: st.p.code } });
+      applyTools(r); closeModal(); render();
+      toast(`Added “${r.result.name}” to the New shelf. traPYze shows what it can do before its first run.`, "Open it",
+        () => { const t = S.tools.find((x) => x.id === r.result.id); if (t) openSettings(t); });
+    } catch (e) { st.busy = false; st.error = e.message; draw(); }
+  }
+  function draw() {
+    if (!st.mode) st.mode = info().ready ? "here" : "copy";
+    if (!st.site) st.site = (info().settings || {}).chat_site || "copilot";
+    const prov = info().providers[(info().settings || {}).provider] || {};
+    const p = st.p;
+    let body, primary;
+    if (st.stage === "ask") {
+      body = [
+        h("label", { class: "field" }, h("span", { class: "lbl" }, "What should the tool do?"),
+          h("textarea", { class: "input", rows: "5", autofocus: true,
+            placeholder: "For example: every time I run it, download today's euro exchange rates for USD, GBP and JPY from the European Central Bank, add them to a CSV file in the shared data folder, and make a line chart of the last 90 days.",
+            oninput: (e) => { st.desc = e.target.value; } }, st.desc),
+          h("span", { class: "help" }, "Say what goes in, what should come out, and what you'd like to be able to change each run.")),
+        h("div", { class: "field" }, h("span", { class: "lbl", id: "aw-how" }, "How?"),
+          h("div", { class: "ai-how", role: "radiogroup", "aria-labelledby": "aw-how" },
+            h("button", { type: "button", role: "radio", class: "nt-kind", "aria-checked": String(st.mode === "copy"), onclick: () => { st.mode = "copy"; draw(); } },
+              h("strong", {}, "Copy and paste"), h("small", {}, "Free. traPYze copies the request and opens a chat site; you paste it in.")),
+            h("button", { type: "button", role: "radio", class: "nt-kind", "aria-checked": String(st.mode === "here"), disabled: !info().ready, onclick: () => { st.mode = "here"; draw(); } },
+              h("strong", {}, info().ready ? `Ask ${prov.name || "the AI"} here` : "Ask here"),
+              h("small", {}, info().ready ? `With your key, model ${(info().settings || {}).model}.` : "Needs a key: Look and feel, AI help."))),
+          st.mode === "copy" ? h("label", { class: "ai-site" }, h("span", {}, "Chat site"),
+            h("select", { class: "input", onchange: (e) => { st.site = e.target.value; draw(); } },
+              Object.entries(info().chat_sites).map(([k, v]) => h("option", { value: k, selected: k === st.site }, v.name)))) : null)];
+      primary = h("button", { type: "button", class: "btn primary", disabled: st.busy, onclick: go },
+        st.busy ? (st.mode === "here" ? "Writing… (can take a minute)" : "Copying…") : st.mode === "here" ? "Write the tool" : `Copy and open ${siteName()}`);
+    } else if (st.stage === "paste") {
+      body = [
+        h("div", { class: "notice " + (st.copied ? "ok" : "warn") }, st.copied
+          ? [h("strong", {}, "The request is copied. "), `In ${siteName()}, paste it (Ctrl+V) and send it.`]
+          : [h("strong", {}, "Couldn't copy by itself. "), "Select the request below, copy it (Ctrl+C), and paste it into the chat."]),
+        h("details", { class: "ai-prompt", open: !st.copied }, h("summary", {}, `The request (${st.prompt.length.toLocaleString()} characters)`),
+          h("textarea", { class: "input mono", rows: "8", readonly: true, onfocus: (e) => e.target.select() }, st.prompt)),
+        h("label", { class: "field" }, h("span", { class: "lbl" }, "Paste the whole answer here"),
+          h("textarea", { class: "input mono", rows: "9", placeholder: "Copy the AI's complete answer, including the script, and paste it here.",
+            oninput: (e) => { st.pasted = e.target.value; dialog.querySelector(".aw-read").disabled = !st.pasted.trim(); } }, st.pasted))];
+      primary = h("button", { type: "button", class: "btn primary aw-read", disabled: st.busy || !st.pasted.trim(), onclick: readPasted }, "Check the tool");
+    } else {
+      const bad = p.problems.length > 0;
+      body = [
+        st.via ? h("p", { class: "help", style: "margin:0 0 8px" }, "Written by " + st.via) : null,
+        h("div", { class: "aw-card" }, h("strong", {}, p.name || "A script without a label"), p.description ? h("span", { class: "muted" }, p.description) : null,
+          h("span", { class: "muted" }, `${p.lines} lines`)),
+        p.problems.map((x) => h("div", { class: "notice warn", style: "margin-top:8px" }, x)),
+        h("div", { class: "field", style: "margin-top:14px" }, h("span", { class: "lbl" }, "What it can do"),
+          p.wants.length ? h("ul", { class: "aw-list" }, p.wants.map((w) => h("li", {}, w))) : h("p", { class: "muted", style: "margin:0" }, "Read and write its own files; traPYze found nothing beyond that.")),
+        h("div", { class: "field" }, h("span", { class: "lbl" }, "Health check"),
+          p.findings.length ? h("ul", { class: "aw-list" }, p.findings.map((f) => h("li", {}, h("strong", {}, f.title), f.detail ? " " + f.detail : "")))
+            : h("p", { style: "margin:0" }, h("span", { class: "dt-dot ok", style: "margin-right:6px" }), "Nothing found.")),
+        h("details", { class: "ai-prompt" }, h("summary", {}, "What the AI said"), h("div", { class: "ai-answer" }, md(st.answer, true))),
+        h("details", { class: "ai-prompt" }, h("summary", {}, "Read the script"), h("pre", { class: "md-code", style: "max-height:320px" }, p.code))];
+      primary = h("button", { type: "button", class: "btn primary", disabled: st.busy || !p.name, onclick: save }, bad ? "Add it anyway" : "Add the tool");
+    }
+    dialog.replaceChildren(
+      h("header", {}, h("div", { class: "titles" }, h("h1", { id: "aw-title" }, "Have an AI write a tool"),
+        h("p", {}, st.stage === "result" ? "Nothing runs yet. The tool goes to the New shelf, and traPYze asks once more before its first run."
+          : "traPYze tells the AI how its tools work, so the script arrives with its label, settings and progress in place.")),
+        h("button", { type: "button", class: "x", "aria-label": "Close", onclick: closeModal, html: ICON.close })),
+      h("div", { class: "body" }, body, st.error ? h("div", { class: "notice warn", role: "alert", style: "margin-top:12px" }, st.error) : null),
+      h("footer", {},
+        h("div", { class: "row", style: "gap:16px" },
+          st.stage === "ask" ? h("button", { type: "button", class: "link quiet", onclick: async () => {
+            try { const r = await api("ai/write-prompt", { method: "POST", body: {} }); toast((await copyText(r.prompt)) ? "The prompt is copied. Paste it into any AI chat, then describe your tool." : "Couldn't copy; the prompt is also in the guide."); }
+            catch (e) { toast(e.message); } } }, "Copy only the prompt") : null,
+          st.stage !== "ask" ? h("button", { type: "button", class: "link quiet", onclick: () => { Object.assign(st, { stage: "ask", p: null, error: "" }); draw(); } }, "Start again") : null,
+          st.stage === "ask" ? h("button", { type: "button", class: "link quiet", onclick: () => { closeModal(); openNewTool(); } }, "Use a template instead") : null),
+        h("div", { class: "right" }, h("button", { type: "button", class: "btn", onclick: closeModal }, "Cancel"), primary)));
+  }
+  (S.ai ? Promise.resolve() : loadAI()).then(() => { draw(); showModal(dialog); });
 }
 
 function editorCard(l, set) {
@@ -1273,6 +1391,7 @@ function openSettings(tool, preset) {
     const body = h("div", { class: "body" });
     if (need && need.kind === "unlock") body.append(unlockBox());
     if (need && need.kind === "allow") body.append(allowBox());
+    if (need && need.kind === "review") body.append(reviewBox());
     if (problems.length) body.append(h("div", { class: "notice warn", role: "alert" },
       h("div", {}, h("strong", {}, "Please check these first:"), h("ul", {}, problems.map((p) => h("li", {}, p))))));
     for (const c of tool.checks || []) body.append(h("div", { class: "notice warn check" },
@@ -1424,6 +1543,7 @@ function openSettings(tool, preset) {
     const d = e.data || {};
     if (d.need === "unlock") { need = { kind: "unlock" }; problems = []; loadVault(); }
     else if (d.need === "allow") { need = { kind: "allow", names: d.connections || [] }; problems = []; }
+    else if (d.need === "review") { need = { kind: "review", info: d.review || {} }; problems = []; }
     else problems = d.problems || [e.message];
     draw();
     dialog.querySelector(".notice")?.scrollIntoView({ block: "nearest" });
@@ -1441,6 +1561,24 @@ function openSettings(tool, preset) {
       h("div", {}, h("strong", {}, "This tool needs your vault. "), `Unlock it to give ${tool.name} ${tool.connections.join(", ")}.`),
       h("div", { class: "pathrow" }, pin, h("button", { type: "button", class: "btn primary", onclick: go }, "Unlock and run")),
       pinError ? h("span", { style: "font-weight:600" }, pinError) : null);
+  }
+
+  function reviewBox() {
+    const r = need.info, level = (r.summary || {}).level;
+    return h("div", { class: "notice warn review", role: "alert", style: "flex-direction:column;align-items:stretch;gap:10px" },
+      h("div", {}, h("strong", {}, `Before the first run of ${tool.name}. `),
+        (r.origin || "It's new here") + ". A tool is a program and can do anything you can do on this computer, so have one look first."),
+      h("div", {}, h("strong", {}, "It can: "), (r.wants || []).length
+        ? h("ul", {}, r.wants.map((w) => h("li", {}, w)))
+        : "read and write its own files; traPYze found nothing beyond that."),
+      (r.findings || []).length ? h("div", {}, h("strong", {}, level === "bad" ? "The health check found problems: " : "The health check noticed: "),
+        h("ul", {}, r.findings.map((f) => h("li", {}, f.title)))) : h("div", {}, h("span", { class: "dt-dot ok", style: "margin-right:6px" }), "The health check found nothing."),
+      h("div", { class: "row", style: "flex-wrap:wrap" },
+        h("button", { type: "button", class: "btn", onclick: () => { closeModal(); openAI(tool, { task: "explain" }); } }, "Ask AI to explain it"),
+        h("button", { type: "button", class: "btn", onclick: () => editTool(tool) }, "Read the script"),
+        h("button", { type: "button", class: "btn primary", onclick: async () => {
+          try { applyTools(await api("review/accept", { method: "POST", body: { tool: tool.id } })); need = null; again(false); }
+          catch (e) { toast(e.message); } } }, "I've looked, run it")));
   }
 
   function allowBox() {
@@ -2071,6 +2209,7 @@ function openChain(c, message) {
       const d = e.data || {};
       if (d.need === "unlock") { closeModal(); openUnlock(() => openChain(c)); return; }
       if (d.need === "allow") { need = { kind: "allow", names: d.connections || [] }; error = ""; }
+      else if (d.need === "review") error = e.message + " Open that tool and run it once by itself.";
       else error = d.problems || e.message;
       draw();
     }
