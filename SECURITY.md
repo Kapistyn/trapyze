@@ -18,7 +18,10 @@ You'll get an answer within a week.
   a command line.
 - Sharing a tool and Ask AI check for vault values and key-like text first.
 - The window only listens on 127.0.0.1, and every address carries a fresh key.
-- Updates come only from this repository's releases, over HTTPS.
+- Updates come only from this repository's releases, over HTTPS, and are compared
+  with the release's published checksums before they are installed.
+- A tool that was imported or written by an AI shows what it can do and waits for
+  your OK before its first run.
 
 ## Running other people's tools
 

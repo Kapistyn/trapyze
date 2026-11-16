@@ -2,6 +2,25 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.14.0] - 2026-11-16
+
+**AI-written tools, and a safer first run.**
+
+- **Have an AI write a tool.** *New tool*, then "Or have an AI write it": describe
+  what you want, and traPYze hands the AI its rules together with your description,
+  by copy and paste with any chat site or with your own key. It checks the answer,
+  shows what the script can do, and puts the tool on the New shelf. "Copy only the
+  prompt" gives you the bare prompt for a chat of your own.
+- **A look before the first run.** A tool you imported or that an AI wrote shows
+  where it came from, what it can do (the internet, vault keys, deleting files,
+  starting programs) and what the health check found, before it runs for the first
+  time. Until then it can't be planned or chained.
+- **Updates are verified.** Each release now publishes checksums, and traPYze
+  compares the downloaded update with them before installing. A file that doesn't
+  match is never installed.
+- One set of rules for AI: the prompt in the guide, the new `AGENTS.md` for coding
+  assistants and what the app sends are the same text, checked by a test.
+
 ## [0.13.2] - 2026-11-15
 
 - The Windows installer no longer stops at the very end with a red

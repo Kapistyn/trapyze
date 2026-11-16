@@ -193,9 +193,10 @@ tz.output_path("rates.csv").write_text(csv_text)   # shows up under Outputs
 
 The top block is the standard [PEP 723](https://peps.python.org/pep-0723/)
 format, so the script still runs anywhere else too. Don't want to write it
-yourself? **Ask AI, Make it traPYze-ready** writes the label for you, and the
-[guide](docs/guide.md#prompt-for-ai-written-tools) has a prompt to paste into
-any AI chat to get tools that are ready from the start.
+yourself? **New tool, Have an AI write it**: describe what you want, and traPYze
+tells the AI how its tools work, so the script arrives ready. The same
+[prompt](docs/guide.md#prompt-for-ai-written-tools) works in any AI chat, and
+**Ask AI, Make it traPYze-ready** adds the label to a script you already have.
 
 ## How it works
 
@@ -227,8 +228,9 @@ and no tracking.
 and Ask AI helps with that.
 
 **Is it safe?** traPYze keeps your keys encrypted and away from scripts that
-weren't allowed to use them. But a tool is a program that can do anything you
-can: only run tools from people you trust, and look at the health check first.
+weren't allowed to use them, and a tool you imported or an AI wrote shows what
+it can do before its first run. But a tool is a program that can do anything you
+can: only run tools from people you trust.
 See [SECURITY.md](SECURITY.md).
 
 **Does it work offline?** Yes. Only installing a tool's packages the first
