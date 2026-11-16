@@ -208,8 +208,10 @@ function toolsView() {
     h("div", { class: "row" },
       h("label", { class: "search" }, h("span", { class: "sr" }, "Search tools"), h("span", { html: ICON.search }), search),
       viewSwitch(),
+      h("button", { type: "button", class: "btn", onclick: () => openPacks() }, h("span", { html: ICON.cube }), "Get tools"),
       h("button", { type: "button", class: "btn primary", onclick: () => openImport() }, h("span", { html: ICON.plus }), "Import"),
       h("button", { type: "button", class: "btn icon-only", "aria-label": "More", title: "More", onclick: (e) => openMenu(e.currentTarget, [
+        { label: "Get ready-made tools…", run: () => openPacks() },
         { label: "New tool from a template…", run: () => openNewTool() },
         { label: "Have an AI write a tool…", run: () => openAIWrite() },
         { label: "Open the scripts folder", run: () => openPath(S.home + "/scripts") },
@@ -606,6 +608,7 @@ function desktopView(wrap, q) {
   if (!q) wrap.append(h("div", { class: "row", style: "gap:18px" },
     h("button", { type: "button", class: "link", onclick: () => askShelfName(null) }, h("span", { html: ICON.plus, style: "display:inline-flex;vertical-align:middle;margin-right:4px" }), "Add a shelf"),
     h("button", { type: "button", class: "link", onclick: () => openNewTool() }, h("span", { html: ICON.plus, style: "display:inline-flex;vertical-align:middle;margin-right:4px" }), "New tool"),
+    h("button", { type: "button", class: "link", onclick: () => openPacks() }, h("span", { html: ICON.plus, style: "display:inline-flex;vertical-align:middle;margin-right:4px" }), "Get ready-made tools"),
     S.tools.length > 1 ? h("button", { type: "button", class: "link", onclick: () => openChainEditor(null) }, h("span", { html: ICON.plus, style: "display:inline-flex;vertical-align:middle;margin-right:4px" }), "New chain") : null));
   if (q && !searchHits(q).length) wrap.append(h("div", { class: "empty" }, "No tool matches “", S.query, "”."));
 }
@@ -987,6 +990,41 @@ function openAIWrite(start) {
         h("div", { class: "right" }, h("button", { type: "button", class: "btn", onclick: closeModal }, "Cancel"), primary)));
   }
   (S.ai ? Promise.resolve() : loadAI()).then(() => { draw(); showModal(dialog); });
+}
+
+function openPacks() {
+  const dialog = h("section", { class: "dialog wide", role: "dialog", "aria-modal": "true", "aria-labelledby": "pk-title" });
+  let packs = null, error = "", busy = "";
+  async function add(pack) {
+    busy = pack.id; error = ""; draw();
+    try {
+      const r = await api("packs/install", { method: "POST", body: { pack: pack.id } });
+      applyTools(r); packs = r.packs; render();
+      toast(`Added ${pack.name}: ${pack.tools.length} tools. You'll find them on the New shelf.`);
+    } catch (e) { error = e.message; }
+    busy = ""; draw();
+  }
+  function draw() {
+    dialog.replaceChildren(
+      h("header", {}, h("div", { class: "titles" }, h("h1", { id: "pk-title" }, "Get tools"),
+        h("p", {}, "Ready-made tools that come with traPYze. They work without the internet and need nothing installed.")),
+        h("button", { type: "button", class: "x", "aria-label": "Close", onclick: closeModal, html: ICON.close })),
+      h("div", { class: "body" },
+        error ? h("div", { class: "notice warn", role: "alert" }, error) : null,
+        !packs && !error ? h("p", {}, "Loading…") : null,
+        (packs || []).map((p) => h("section", { class: "pack" },
+          h("div", { class: "pack-head" },
+            h("div", {}, h("h2", {}, p.name), h("p", {}, p.description)),
+            p.installed ? h("span", { class: "pack-done" }, h("span", { html: ICON.check }), "Added")
+              : h("button", { type: "button", class: "btn primary", disabled: !!busy, onclick: () => add(p) },
+                  busy === p.id ? "Adding…" : p.partly ? "Add the missing tools" : `Add ${p.tools.length} tools`)),
+          h("ul", { class: "pack-tools" }, p.tools.map((t) => h("li", {}, square(t, 32),
+            h("div", {}, h("strong", {}, t.name), h("span", {}, t.description)))))))),
+      h("footer", {}, h("span", { class: "help" }, "Added tools are ordinary scripts in your scripts folder: read them, change them or remove them as you like."),
+        h("div", { class: "right" }, h("button", { type: "button", class: "btn primary", onclick: closeModal }, "Done"))));
+  }
+  draw(); showModal(dialog);
+  api("packs").then((r) => { packs = r.packs; draw(); }).catch((e) => { error = e.message; draw(); });
 }
 
 function editorCard(l, set) {

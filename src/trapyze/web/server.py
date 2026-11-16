@@ -42,6 +42,8 @@ from ..versions import Versions, diff_lines
 from .. import ai as ai_help
 from ..ai import AIError, AISettings
 from ..updater import UpdateError, Updates, download_verified, start_update
+from ..packs import shelf_for as pack_shelf
+from ..packs import PackProblem, install as install_pack, overview as pack_overview
 from ..review import NeedsReview, ORIGINS, Reviews, wants as tool_wants
 from ..layout import Layout, item_texts, suggest as suggest_shelf, suggest_chain, topics
 from ..store import ICONS, Chain, ChainRun, Chains, Looks, Presets, Step, StoreError, step_settings
@@ -215,7 +217,7 @@ class App:
                 stamp = 0.0
             key = (str(t.path), stamp)
             if key not in self._suggest_cache:
-                self._suggest_cache[key] = suggest_shelf(t)
+                self._suggest_cache[key] = pack_shelf(t.group, t.path.stem) or suggest_shelf(t)
             out[f"tool:{t.id}"] = self._suggest_cache[key]
         for c in self.chains.all():
             out[f"chain:{c.id}"] = suggest_chain(c, out)
@@ -1329,6 +1331,14 @@ class Handler(BaseHTTPRequestHandler):
                                                   "summary": app.packages.summary(tool)})
             except (PackageProblem, LookupError, OSError) as exc:
                 return self._error(HTTPStatus.BAD_REQUEST, str(exc))
+        if method == "GET" and parts == ["packs"]:
+            return self._json(HTTPStatus.OK, {"packs": pack_overview(app.home.scripts)})
+        if method == "POST" and parts == ["packs", "install"]:
+            try:
+                added = install_pack(app.home.scripts, str(self._body().get("pack", "")))
+            except (PackProblem, OSError) as exc:
+                return self._error(HTTPStatus.BAD_REQUEST, str(exc))
+            return self._json(HTTPStatus.OK, {**app.tools(), "added": added, "packs": pack_overview(app.home.scripts)})
         if method == "POST" and parts == ["review", "accept"]:
             app.reviews.accept(str(self._body().get("tool", "")))
             return self._json(HTTPStatus.OK, app.tools())

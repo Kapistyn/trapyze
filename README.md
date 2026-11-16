@@ -162,6 +162,20 @@ accent colours, compact or comfortable, and your own icon per tool.
 
 <p align="center"><img src="docs/images/desktop-dark.png" width="820" alt="The desktop in dark"></p>
 
+## Ready-made tools
+
+New to Python tools? **Get tools** adds packs that come with traPYze. They work
+without the internet and need nothing installed:
+
+| Pack | Tools |
+|---|---|
+| **Everyday files** | Tidy a folder · Find duplicate files · Back up a folder · Rename files · What takes the space? |
+| **Home finance** | Bank statement overview by category and month · Find subscriptions |
+| **Tables and data** | Check a download · Merge CSV files · CSV into a database · Database table to CSV |
+
+Tools that change files show you a list first and never delete or overwrite your
+files; your bank statement never leaves your computer.
+
 ## Make your own tool
 
 Any Python script works. A few comment lines at the top make it a proper

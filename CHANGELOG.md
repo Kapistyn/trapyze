@@ -2,6 +2,23 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.15.0] - 2026-11-16
+
+**Ready-made tools.**
+
+- **Get tools** on the Tools screen: three packs that come with traPYze and are
+  added with one click. All eleven tools work without the internet and use only
+  what comes with Python, so there is nothing to install.
+  - **Everyday files**: tidy a folder, find duplicate files, back up a folder,
+    rename files, and see what takes the space.
+  - **Home finance**: a monthly overview by category from your bank's CSV export
+    (it finds the columns itself, for most banks), and a subscription finder.
+  - **Tables and data**: check a downloaded CSV, merge CSV files, put a CSV into
+    a database, and get a database table back out for Excel.
+- Tools that change files show a list first, and never delete or overwrite your
+  files. Every pack tool is run on sample data on Windows, Mac and Linux for
+  every change to traPYze.
+
 ## [0.14.0] - 2026-11-16
 
 **AI-written tools, and a safer first run.**

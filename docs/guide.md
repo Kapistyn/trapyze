@@ -12,6 +12,7 @@ Everything traPYze does, step by step. New here? Start with the [README](../READ
 - [The Tools screen: a desktop with shelves](#the-tools-screen-a-desktop-with-shelves)
 - [Making and changing tools](#making-and-changing-tools)
 - [Ask AI](#ask-ai)
+- [Ready-made tools](#ready-made-tools)
 - [Importing a script or a whole program](#importing-a-script-or-a-whole-program)
 - [Package versions: pinned, updated after a test](#package-versions-pinned-updated-after-a-test)
 - [Sharing a tool](#sharing-a-tool)
@@ -215,6 +216,49 @@ and press Enter to open the first match.
 
 The arrangement is kept in `.trapyze/layout.json` in your home folder. Your
 scripts are never changed.
+
+## Ready-made tools
+
+**Get tools** (top of the Tools screen) shows the packs that come with traPYze.
+*Add* copies a pack into your scripts folder and puts its tools on the New shelf.
+They work without the internet and use only what comes with Python.
+
+**Everyday files**
+- *Tidy a folder* sorts loose files into subfolders by kind (Pictures, Documents…)
+  or by month. It first makes a list; switch on *Really move the files* when
+  you're happy. A file is never overwritten: a second `photo.jpg` becomes
+  `photo (2).jpg`.
+- *Find duplicate files* compares contents, not names, and only makes a list.
+- *Back up a folder* makes a dated zip in another place and keeps the newest few.
+  A good one to plan weekly.
+- *Rename files* gives tidy names (date first, numbered, or lowercase without
+  spaces), again with a list first.
+- *What takes the space?* lists the biggest files and subfolders.
+
+**Home finance**
+- *Bank statement overview*: download your transactions as CSV from your bank's
+  website and choose that file. traPYze finds the date, amount and description
+  columns itself (if it can't, name them under More options). You get
+  `overview.html`, with totals per category and month. Categories come from
+  keywords in `my-categories.csv` in the shared data folder; it's made the first
+  time with common ones. Open it in Excel and add a line per shop, such as
+  `bakery,Groceries`.
+- *Find subscriptions* lists payments that come back weekly, monthly or yearly,
+  and what each costs per year. It works best with a year of transactions.
+
+**Tables and data**
+- *Check a download* reports on a CSV file: rows, columns, the dates it covers,
+  empty cells, identical rows and broken lines. It fails when the file is empty,
+  is really a web page (a download that needed a login), or has fewer rows than
+  you expect, so in a chain it stops the tools after it from using bad data.
+- *Merge CSV files* joins all CSV files in a folder, also when their columns differ.
+- *CSV into a database* puts a CSV into a table of a database in the shared data
+  folder, where other tools can use it.
+- *Database table to CSV* lists a database's tables, or saves one for Excel.
+
+An added tool is an ordinary script: read it, change it (Changes keeps every
+version), or delete its file. Adding a pack again only brings back files that are
+missing; it never replaces one you changed.
 
 ## Making and changing tools
 

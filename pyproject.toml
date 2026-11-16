@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "trapyze"
-version = "0.14.0"
+version = "0.15.0"
 description = "Run your Python tools without the technical bits."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -26,4 +26,4 @@ trapyze-app = "trapyze.desktop:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-trapyze = ["resources/helper/*.py", "resources/examples/*.py", "resources/templates/*.py", "web/static/*"]
+trapyze = ["resources/helper/*.py", "resources/examples/*.py", "resources/templates/*.py", "resources/packs/*/*.py", "web/static/*"]
