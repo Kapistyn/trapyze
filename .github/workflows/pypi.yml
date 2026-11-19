@@ -33,6 +33,10 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - name: Build the wheel and source package
         run: |
+          # the code is the tagged version; the release helpers come from this workflow's commit,
+          # so versions released before a helper existed can still be published
+          git fetch --depth 1 origin "$GITHUB_SHA"
+          git checkout "$GITHUB_SHA" -- tools/release.py tools/set_repo.py
           python3 tools/release.py check "$TAG"
           python3 tools/set_repo.py "$GITHUB_REPOSITORY"
           python3 tools/release.py readme "$TAG" "$GITHUB_REPOSITORY"

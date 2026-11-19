@@ -72,6 +72,13 @@ irm https://github.com/kapistyn/trapyze/releases/latest/download/install.ps1 | i
 curl -LsSf https://github.com/kapistyn/trapyze/releases/latest/download/install.sh | sh
 ```
 
+**Already use [uv](https://docs.astral.sh/uv/)?** traPYze is also [on PyPI](https://pypi.org/project/trapyze/):
+
+```sh
+uv tool install "trapyze[desktop]"
+trapyze shortcut
+```
+
 You don't need Python: the installer adds [uv](https://docs.astral.sh/uv/), which
 fetches and runs Python for traPYze. No administrator needed. traPYze opens when
 it's done, with three example tools, and adds a shortcut to your desktop, Start

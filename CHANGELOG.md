@@ -2,6 +2,13 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.17.4] - 2026-11-19
+
+- **traPYze has a website**: <https://kapistyn.github.io/trapyze/>, with the
+  guide and this changelog.
+- **traPYze is on PyPI.** With uv already installed: `uv tool install
+  "trapyze[desktop]"`, then `trapyze shortcut`.
+
 ## [0.17.3] - 2026-11-19
 
 - **The window fills the screen when it opens**, so the bottom is no longer cut
