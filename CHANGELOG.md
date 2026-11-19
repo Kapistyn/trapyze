@@ -2,6 +2,11 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.17.2] - 2026-11-19
+
+- Opening traPYze now looks for a new version straight away (unless it looked in
+  the last hour), instead of waiting until a day has passed since the last look.
+
 ## [0.17.1] - 2026-11-19
 
 - **The version is always in view**, at the bottom of the menu: "traPYze 0.17.1,

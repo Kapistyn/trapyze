@@ -784,7 +784,14 @@ class App:
             return
 
         def loop() -> None:
+            first = True
             while True:
+                if first:  # opening traPYze looks for a new version, unless it looked in the last hour
+                    first = False
+                    st = self.updates.state()
+                    if st["online"] and st["auto"] and time.time() - float(st.get("checked") or 0) > 3600 \
+                            and not os.environ.get("TRAPYZE_NO_UPDATE_CHECK"):
+                        threading.Thread(target=self._quiet_update_check, name="trapyze-update-check", daemon=True).start()
                 if time.time() - self._package_check_started > 6 * 3600:  # the daily look for newer packages
                     self._package_check_started = time.time()
                     threading.Thread(target=lambda: self.packages.check_all(self.home.tools()[0]),
