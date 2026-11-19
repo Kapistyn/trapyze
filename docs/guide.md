@@ -478,6 +478,9 @@ without a terminal window.
 - When a tool or chain finishes while the window is hidden, a notification
   says so. Turn that off under Look and feel.
 - Opening traPYze a second time brings the open one forward.
+- The window fills the screen when it opens. Under Look and feel, *When the
+  window opens*, choose full screen (no title bar) or a normal size, which is
+  kept small enough for your screen. **F11** switches full screen on and off.
 - After an update, opening traPYze closes the older copy that was still
   running in the tray (when no tools are running in it) and starts the new
   one. If tools are still running, it says so; quit from the tray when

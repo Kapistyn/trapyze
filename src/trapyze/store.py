@@ -306,11 +306,14 @@ class ChainRun:
 
 
 # Look and feel ------------------------------------------------------------
+WINDOW_SIZES = ("maximized", "fullscreen", "normal")
+
+
 class Looks:
     """{"theme", "accent", "density", "celebrate", "tools": {tool_id: {"icon", "color", "image"}}}"""
 
     DEFAULT = {"theme": "auto", "accent": "blue", "density": "comfortable", "celebrate": True,
-               "window": "app", "notify": True, "editor": "", "tools": {}}
+               "window": "app", "window_size": "maximized", "notify": True, "editor": "", "tools": {}}
 
     def __init__(self, internal: Path):
         self.path = internal / "looks.json"
@@ -342,6 +345,10 @@ class Looks:
                 if body["window"] not in ("app", "browser"):
                     raise StoreError("Choose its own window or the browser.")
                 data["window"] = body["window"]
+            if "window_size" in body:
+                if body["window_size"] not in WINDOW_SIZES:
+                    raise StoreError("Choose filling the screen, full screen or normal size.")
+                data["window_size"] = body["window_size"]
             if "notify" in body:
                 data["notify"] = bool(body["notify"])
             if "editor" in body:
