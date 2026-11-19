@@ -97,7 +97,7 @@ footer{max-width:1080px;margin:0 auto;padding:0 24px 40px;color:var(--soft);font
 
 
 def page(title: str, description: str, body: str, url: str, repo: str, extra_head: str = "") -> str:
-    image = url + "images/desktop.png"
+    image = url + "images/social-preview.png"
     data = ('{"@context":"https://schema.org","@type":"SoftwareApplication","name":"traPYze",'
             '"applicationCategory":"DeveloperApplication","operatingSystem":"Windows, macOS, Linux",'
             '"offers":{"@type":"Offer","price":"0","priceCurrency":"EUR"},'
