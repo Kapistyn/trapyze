@@ -2,6 +2,13 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.17.3] - 2026-11-19
+
+- **The window fills the screen when it opens**, so the bottom is no longer cut
+  off on smaller or scaled screens. Under Look and feel, *When the window opens*:
+  fill the screen, full screen (no title bar) or normal size. A normal window is
+  now kept smaller than the screen. **F11** switches full screen on and off.
+
 ## [0.17.2] - 2026-11-19
 
 - Opening traPYze now looks for a new version straight away (unless it looked in

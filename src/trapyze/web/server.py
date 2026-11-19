@@ -1253,6 +1253,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(HTTPStatus.CONFLICT, "This traPYze was started without a window or tray.")
             threading.Timer(0.3, app.desktop.quit).start()
             return self._json(HTTPStatus.OK, {"quitting": True})
+        if method == "POST" and parts == ["desktop", "fullscreen"]:
+            done = bool(app.desktop and app.desktop.toggle_fullscreen())
+            return self._json(HTTPStatus.OK, {"toggled": done})
         if method == "POST" and parts == ["desktop", "show"]:
             shown = bool(app.desktop and app.desktop.show())
             return self._json(HTTPStatus.OK, {"shown": shown})

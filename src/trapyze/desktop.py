@@ -158,11 +158,29 @@ class Desktop:
             self._cleanup()
         return 0
 
+    def _size(self) -> tuple[str, int, int]:
+        """How big the window opens: the chosen way, and a normal size that fits this screen."""
+        pref = self.app.looks.get().get("window_size", "maximized")
+        w, h = 1280, 860
+        try:
+            screen = self.webview.screens[0]
+            w, h = min(w, int(screen.width * 0.92)), min(h, int(screen.height * 0.88))
+        except Exception:  # no screen information: keep the usual size
+            pass
+        return pref, w, h
+
     def _run_window(self) -> None:
         dark = self._dark()
-        self.window = self.webview.create_window(
-            "traPYze", self.url, width=1280, height=860, min_size=(820, 600),
-            background_color="#0F131A" if dark else "#F4F5F7", text_select=True)
+        pref, w, h = self._size()
+        kw = dict(width=w, height=h, min_size=(min(820, w), min(600, h)),
+                  background_color="#0F131A" if dark else "#F4F5F7", text_select=True)
+        try:
+            self.window = self.webview.create_window("traPYze", self.url, maximized=pref == "maximized",
+                                                     fullscreen=pref == "fullscreen", **kw)
+        except TypeError:  # an older pywebview without these: open normally, then fill the screen
+            self.window = self.webview.create_window("traPYze", self.url, **kw)
+            if pref == "maximized":
+                self.window.events.shown += lambda *a: self._maximize()
         self.window.events.closing += self._on_closing
         self.window.events.shown += lambda *a: setattr(self, "visible", True)
         self.visible = True
@@ -267,7 +285,22 @@ class Desktop:
             self.window.restore()
         except Exception:
             pass
+        if self.app.looks.get().get("window_size", "maximized") == "maximized":
+            self._maximize()           # restoring would otherwise shrink it back to normal size
         self.visible = True
+        return True
+
+    def _maximize(self) -> None:
+        try:
+            self.window.maximize()
+        except Exception:
+            pass
+
+    def toggle_fullscreen(self) -> bool:
+        """F11 in the window: full screen on or off."""
+        if self.window is None:
+            return False
+        self.window.toggle_fullscreen()
         return True
 
     def hide(self) -> None:

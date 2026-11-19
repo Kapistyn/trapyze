@@ -46,6 +46,12 @@ class FakeWindow:
     def hide(self):
         self.hidden = True
 
+    def maximize(self):
+        self.maximized = getattr(self, "maximized", 0) + 1
+
+    def toggle_fullscreen(self):
+        self.full = not getattr(self, "full", False)
+
     def create_confirmation_dialog(self, title, message):
         self.asked.append(message)
         return self.answer
@@ -60,7 +66,7 @@ class FakeWindow:
 
 
 def fake_webview():
-    mod = types.SimpleNamespace(windows=[])
+    mod = types.SimpleNamespace(windows=[], screens=[types.SimpleNamespace(width=1366, height=768)])
 
     def create_window(title, url, **kw):
         w = FakeWindow(title, url, **kw)
@@ -249,6 +255,28 @@ class DesktopTests(unittest.TestCase):
         self.assertEqual(info["mode"], "window")
         icon.menu.click("Quit traPYze")
         t.join(20)
+
+    def test_window_size(self):
+        from trapyze.store import Looks, StoreError
+        looks = Looks(self.home.internal)
+        self.assertEqual(looks.get()["window_size"], "maximized")   # fills the screen unless told otherwise
+        with self.assertRaises(StoreError):
+            looks.update({"window_size": "huge"})
+        for pref, maxi, full in (("maximized", True, False), ("fullscreen", False, True), ("normal", False, False)):
+            looks.update({"window_size": pref})
+            wv, tray = fake_webview(), fake_pystray()
+            d = dk.Desktop(self.home, "auto", webview=wv, pystray=tray, open_browser=lambda u: None)
+            t, result = self.start(d)
+            self.assertTrue(wait_for(lambda: tray.icons))
+            win = wv.windows[-1]
+            self.assertEqual((win.kw["maximized"], win.kw["fullscreen"]), (maxi, full), pref)
+            self.assertLessEqual(win.kw["height"], 768 * 0.88)       # a normal window still fits a small screen
+            req = urllib.request.Request(win.url.replace("/?t=", "/api/desktop/fullscreen?t="), data=b"{}", method="POST",
+                                         headers={"Content-Type": "application/json"})
+            self.assertTrue(json.loads(urllib.request.urlopen(req).read())["toggled"])
+            self.assertTrue(win.full)                                # F11 reached the window
+            tray.icons[-1].menu.click("Quit traPYze")
+            t.join(20)
 
     def test_newer_version_replaces_an_idle_older_one(self):
         import trapyze.web.server as server_module

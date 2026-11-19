@@ -1403,6 +1403,11 @@ function closeModal() {
   if (back && back.focus) back.focus();
 }
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && S.modal) closeModal(); });
+document.addEventListener("keydown", (e) => {   // F11 in traPYze's own window: full screen on or off
+  if (e.key !== "F11" || (S.desktop || {}).mode !== "window") return;
+  e.preventDefault();
+  api("desktop/fullscreen", { method: "POST", body: {} }).catch(() => {});
+});
 
 /* ---------- settings ---------- */
 function shownValue(v) {
@@ -2985,6 +2990,15 @@ function desktopCard(l, set) {
       h("div", {}, h("strong", {}, "The own window needs the desktop add-on. "), "Until then traPYze opens in the browser. To add it, close traPYze and run this in PowerShell, in traPYze's folder:"),
       h("code", { class: "snippet" }, d.install || 'uv tool install --reinstall ".[desktop]"')) : null,
     (l.window || "app") === "app" && d.window && d.mode !== "window" ? h("p", { class: "help", style: "margin:12px 0 0" }, "Takes effect the next time you open traPYze.") : null,
+    (l.window || "app") === "app" && d.window ? h("div", { style: "margin-top:16px" },
+      h("strong", {}, "When the window opens"),
+      h("div", { class: "choices", style: "margin-top:8px" },
+        ...[["maximized", "Fill the screen", "Above the taskbar, with the title bar"],
+            ["fullscreen", "Full screen", "The whole screen, no title bar; F11 gets you out"],
+            ["normal", "Normal size", "A window that fits on your screen"]].map(([v, label, hint]) =>
+          h("button", { type: "button", class: "choice tall", "aria-pressed": String((l.window_size || "maximized") === v), onclick: () => set({ window_size: v }) },
+            h("span", {}, h("strong", {}, label), h("small", {}, hint))))),
+      h("p", { class: "help", style: "margin:8px 0 0" }, "F11 switches full screen on and off at any time. The size you choose applies the next time traPYze opens.")) : null,
     h("div", { class: "toggle-row", style: "border:0;padding:16px 0 0" },
       h("div", { class: "t" }, h("span", { id: "lf-n" }, "Tell me when a tool finishes"),
         h("span", { class: "help" }, d.tray ? "A notification by the clock, while traPYze is in the background." : "Needs the desktop add-on.")),
