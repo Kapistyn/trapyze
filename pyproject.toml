@@ -10,7 +10,35 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "traPYze contributors" }]
+keywords = ["python scripts", "script launcher", "scheduler", "desktop", "no-code", "automation", "pep 723", "uv"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Web Environment",
+    "Environment :: Win32 (MS Windows)",
+    "Environment :: MacOS X",
+    "Intended Audience :: End Users/Desktop",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Intended Audience :: Science/Research",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Desktop Environment",
+    "Topic :: Office/Business",
+    "Topic :: Utilities",
+]
 dependencies = ["cryptography>=42"]
+
+[project.urls]
+Homepage = "https://kapistyn.github.io/trapyze/"
+Guide = "https://kapistyn.github.io/trapyze/guide.html"
+Download = "https://github.com/Kapistyn/trapyze/releases/latest"
+Source = "https://github.com/Kapistyn/trapyze"
+Issues = "https://github.com/Kapistyn/trapyze/issues"
+Changelog = "https://kapistyn.github.io/trapyze/changelog.html"
 
 [project.optional-dependencies]
 # Its own window and a tray icon. Without these, traPYze opens in the browser.

@@ -1,0 +1,42 @@
+name: pypi
+
+# Publishes a released version on PyPI, so "pip install trapyze" and "uv tool install trapyze" work.
+# The release workflow starts this by itself when the repository variable PYPI_PUBLISH is "true";
+# for a version that is already out, press "Run workflow" here and give its tag (like v0.17.3).
+#
+# One-time setup on pypi.org: Your account, Publishing, add a pending publisher with
+#   owner Kapistyn, repository trapyze, workflow pypi.yml, environment pypi.
+# No password or token is stored anywhere: PyPI trusts this workflow ("trusted publishing").
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Version to publish, like v0.17.3"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  pypi:
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/trapyze/
+    permissions:
+      id-token: write
+    env:
+      TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: "${{ inputs.tag }}" }
+      - uses: astral-sh/setup-uv@v6
+      - name: Build the wheel and source package
+        run: |
+          python3 tools/release.py check "$TAG"
+          python3 tools/set_repo.py "$GITHUB_REPOSITORY"
+          python3 tools/release.py readme "$TAG" "$GITHUB_REPOSITORY"
+          uv build --out-dir pypi
+          ls -l pypi
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with: { packages-dir: pypi }

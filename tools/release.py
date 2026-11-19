@@ -2,6 +2,9 @@
 
   python tools/release.py check v0.13.0   the tag must match the version in pyproject.toml
   python tools/release.py notes v0.13.0   release notes: that version's part of CHANGELOG.md, plus how to install
+  python tools/release.py readme v0.13.0 owner/name
+                                          rewrites README.md's own links and pictures to full GitHub
+                                          addresses for that version, so they work on PyPI too
 """
 
 import re
@@ -36,7 +39,26 @@ Already have traPYze? It offers the update by itself (Look and feel, Updates), o
 """
 
 
+def absolute_links(text: str, tag: str, repo: str) -> str:
+    """README links like docs/guide.md and pictures like docs/images/x.png, as full addresses."""
+    def fix(link: str, picture: bool) -> str:
+        if re.match(r"^[a-z]+:|^#|^//", link):
+            return link
+        if picture:
+            return f"https://raw.githubusercontent.com/{repo}/{tag}/{link}"
+        return f"https://github.com/{repo}/blob/{tag}/{link}"
+    text = re.sub(r'(src=")([^"]+)(")', lambda m: m[1] + fix(m[2], True) + m[3], text)
+    text = re.sub(r'(href=")([^"]+)(")', lambda m: m[1] + fix(m[2], False) + m[3], text)
+    text = re.sub(r'(!\[[^\]]*\]\()([^)\s]+)(\))', lambda m: m[1] + fix(m[2], True) + m[3], text)
+    return re.sub(r'((?<!!)\[[^\]]*\]\()([^)\s]+)(\))', lambda m: m[1] + fix(m[2], False) + m[3], text)
+
+
 def main(argv: list[str]) -> int:
+    if len(argv) >= 3 and argv[0] == "readme":
+        path = ROOT / "README.md"
+        path.write_text(absolute_links(path.read_text(encoding="utf-8"), argv[1], argv[2]), encoding="utf-8")
+        print(f"README.md links now point at {argv[2]} {argv[1]}.")
+        return 0
     if len(argv) < 2 or argv[0] not in ("check", "notes"):
         print(__doc__)
         return 2
