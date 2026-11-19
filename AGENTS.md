@@ -6,7 +6,7 @@ The code is in `src/trapyze` (standard library plus `cryptography`; the web page
 
 ## Working on traPYze itself
 
-- Run the tests with `uv run --with pytest --with pillow python -m pytest -q`. They
+- Run the tests with `uv run --with pytest --with pillow --with pandas python -m pytest -q`. They
   need no internet. Add a test for what you change.
 - Messages are for people: say what happened and what to do, in plain words.
 - Never let a secret reach a file, a log or a command line.
@@ -30,6 +30,9 @@ How a traPYze tool works:
 - In the code: `import trapyze_helper as tz`; read options with `tz.settings()`; report progress with
   `tz.progress(fraction, "what it's doing in plain words")`; save results with `tz.output_path(name)`;
   shared data files go in `tz.data_path(name)` and are listed as `writes = [...]` in the label.
+- For stock, index, fund, currency or futures prices use `tz.prices(ticker, start=..., interval="1d")`
+  (Yahoo tickers; needs `yfinance` and `pandas` under `dependencies`). It returns a pandas table and keeps
+  one shared copy for all tools, so only missing bars are downloaded. Don't list it under `writes`.
 - Never use `input()`. Never hard-code paths or keys. Keys come from the vault: list the connection
   name under `connections = [...]` in the label and read it from `os.environ`, or call a web service
   with `tz.api(name, path, params={...})`, which adds the key.

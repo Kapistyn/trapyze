@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
       - name: Run the tests
-        run: uv run --python ${{ matrix.python }} --with pytest --with pillow python -m pytest -q
+        run: uv run --python ${{ matrix.python }} --with pytest --with pillow --with pandas python -m pytest -q
 
   installers:
     name: installer scripts

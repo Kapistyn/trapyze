@@ -19,7 +19,7 @@ surprises, nothing lost.**
 ```
 git clone https://github.com/kapistyn/trapyze
 cd trapyze
-uv run --with pytest python -m pytest -q     # all tests, no internet needed
+uv run --with pytest --with pandas python -m pytest -q     # all tests, no internet needed
 uv run trapyze open                          # try your change
 ```
 
