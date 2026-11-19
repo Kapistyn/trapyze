@@ -43,7 +43,11 @@ irm https://github.com/kapistyn/trapyze/releases/latest/download/install.ps1 | i
 curl -LsSf https://github.com/kapistyn/trapyze/releases/latest/download/install.sh | sh
 ```
 
-Both install [uv](https://docs.astral.sh/uv/) by Astral if it isn't there (it
+**With uv already installed:** traPYze is on [PyPI](https://pypi.org/project/trapyze/),
+so `uv tool install "trapyze[desktop]"` and then `trapyze shortcut` does the same.
+traPYze updates itself with uv, so prefer this over `pip install`.
+
+The installers install [uv](https://docs.astral.sh/uv/) by Astral if it isn't there (it
 fetches and runs Python for traPYze, so you don't need Python yourself), then
 traPYze with its own window, add a shortcut and open it. No administrator
 needed; everything stays inside your user account. Running the installer again
