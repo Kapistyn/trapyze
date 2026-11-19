@@ -184,6 +184,7 @@ function render() {
   main.replaceChildren(S.view === "outputs" ? outputsView() : S.view === "connections" ? connectionsView()
     : S.view === "looks" ? looksView() : S.view === "schedule" ? scheduleView() : toolsView());
   renderRunningChip();
+  renderVersionChip();
   renderVaultChip();
 }
 
@@ -1689,6 +1690,28 @@ function finished(live) {
     r.status === "warning" ? `${live.tool.name} finished, with warnings.` :
     r.status === "stopped" ? `${live.tool.name} was stopped.` : `${live.tool.name} couldn't finish.`;
   toast(text, "See result", () => openResult(live));
+}
+
+function renderVersionChip() {
+  const box = document.getElementById("version-chip");
+  const up = S.update || {};
+  if (!box || !up.current) return;
+  const when = up.checked ? new Date(up.checked * 1000).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
+  const state = up.available ? "new" : up.error ? "error" : up.online && when ? "ok" : "unknown";
+  const line = up.available ? `${up.version} is ready to install` : up.error ? "Couldn't look for updates"
+    : !up.online ? "Doesn't look for updates" : when ? "Up to date" : "Not checked yet";
+  const title = up.available ? `traPYze ${up.current}; version ${up.version} is available. Click to see what's new.`
+    : `traPYze ${up.current}. ${up.error ? up.error : when ? "Last looked for updates " + when + "." : ""} Click to look now.`;
+  box.replaceChildren(h("button", { type: "button", class: `version-chip ${state}`, title,
+    onclick: async () => {
+      if (up.available) return openUpdate();
+      try { S.update = await api("update/check", { method: "POST", body: {} });
+        toast(S.update.available ? `traPYze ${S.update.version} is available.` : `traPYze ${S.update.current} is the newest version.`);
+      } catch (e) { toast(e.message); }
+      renderVersionChip();
+    } },
+    h("span", { class: "vdot", "aria-hidden": "true" }),
+    h("span", { class: "vtext" }, h("strong", {}, `traPYze ${up.current}`), h("span", {}, line))));
 }
 
 function renderRunningChip() {

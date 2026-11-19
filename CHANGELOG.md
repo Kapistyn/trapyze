@@ -2,6 +2,12 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.17.1] - 2026-11-19
+
+- **The version is always in view**, at the bottom of the menu: "traPYze 0.17.1,
+  Up to date", or in orange "0.17.2 is ready to install". Click it to look for a
+  new version straight away, or to see what's new when there is one.
+
 ## [0.17.0] - 2026-11-19
 
 - **Shared prices for all tools: `tz.prices()`.** A tool asks for the bars it
