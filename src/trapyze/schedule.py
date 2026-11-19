@@ -179,7 +179,7 @@ def _ordinal(n: int) -> str:
     return f"{n}{'th' if 11 <= n % 100 <= 13 else {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')}"
 
 
-def describe(when: dict[str, Any]) -> str:
+def describe(when: dict[str, Any], now: dt.datetime | None = None) -> str:
     kind = when["kind"]
     if kind == "weekly":
         days = _days_words(when["days"])
@@ -192,7 +192,8 @@ def describe(when: dict[str, Any]) -> str:
     if kind == "monthly":
         day = "the last day" if when["day"] == "last" else f"the {_ordinal(when['day'])}"
         return f"On {day} of every month at {when['time']}"
-    return "Once, on " + nice_time(dt.datetime.fromisoformat(when["at"]), with_year=True)
+    text = nice_time(dt.datetime.fromisoformat(when["at"]), now, with_year=True)
+    return "Once, " + text if text.startswith(("today", "tomorrow", "yesterday")) else "Once, on " + text
 
 
 def nice_time(t: dt.datetime, now: dt.datetime | None = None, with_year: bool = False) -> str:

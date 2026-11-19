@@ -201,6 +201,7 @@ class App:
             "version": __version__,
             "notice": getattr(self, "notice", ""),
             "update": self.update_info(),
+            "renewals": self.renewals_due(),
         }
 
     def suggestions(self, tools: list[Tool] | None = None) -> dict[str, str]:
@@ -754,6 +755,29 @@ class App:
                 self.desktop.finished(f"“{plan['name']}” couldn't start", message)
             return {"started": False, "verdict": "failed", "message": message}
 
+    def renewals_due(self) -> list[dict[str, Any]]:
+        """Keys that run out within a few days (or already have), for the home screen."""
+        try:
+            return [r for r in self.vault.renewals() if r["due"]]
+        except Exception:
+            return []
+
+    def _remind_renewals(self) -> None:
+        """Once a day, a notification for each key that is about to run out."""
+        due = self.renewals_due()
+        stamp = datetime.date.today().isoformat() + "|" + ",".join(r["name"] for r in due)
+        if not due or stamp == getattr(self, "_renewal_told", "") or not self.desktop:
+            return
+        self._renewal_told = stamp
+        for r in due:
+            when = "today" if r["days_left"] == 0 else f"in {r['days_left']} days" if r["days_left"] > 0 else \
+                f"{-r['days_left']} days ago"
+            try:
+                self.desktop.notify("A key to renew", f"The {r['name']} key runs out {when} ({r['expires']}). "
+                                    "Paste the new key on its card under Connections.")
+            except Exception:
+                pass
+
     def start_planner(self, every: float = 20) -> None:
         """While traPYze is open it checks the plans itself too (the computer's scheduler may be off)."""
         if self._planner:
@@ -767,6 +791,7 @@ class App:
                                      name="trapyze-packages", daemon=True).start()
                 if self.updates.due():
                     threading.Thread(target=self._quiet_update_check, name="trapyze-update-check", daemon=True).start()
+                self._remind_renewals()
                 for plan in self.plans.all():
                     if plan.get("enabled", True):
                         try:
@@ -926,8 +951,9 @@ class App:
                 str(body.get("name", "")), str(body.get("kind", "custom")), values,
                 [str(x) for x in body.get("secret") or []], bool(body.get("scheduled")),
                 str(body.get("description") or ""), body.get("replace_from") or None,
-                api=body.get("api") or None,
+                api=body.get("api") or None, renew_days=int(body["renew_days"]) if body.get("renew_days") else None,
             )
+        self._renewal_told = ""  # a renewed key: tell again when the next one is due
         return self.vault_state()
 
     def delete_connection(self, name: str) -> dict[str, Any]:

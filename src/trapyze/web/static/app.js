@@ -165,7 +165,7 @@ async function loadTools() {
   try {
     const data = await api("tools");
     Object.assign(S, { tools: data.tools, problems: data.problems, data: data.data, home: data.home,
-      chains: data.chains, activeChains: data.active_chains, looks: data.looks, icons: data.icons, desktop: data.desktop, schedule: data.schedule, notice: data.notice, programs: data.programs, layout: data.layout, topics: data.topics || [], update: data.update });
+      chains: data.chains, activeChains: data.active_chains, looks: data.looks, icons: data.icons, desktop: data.desktop, schedule: data.schedule, notice: data.notice, renewals: data.renewals || [], programs: data.programs, layout: data.layout, topics: data.topics || [], update: data.update });
     applyLooks();
     for (const c of data.active_chains || []) if (!S.chainRuns[c.id]) watchChain(c, false);
     for (const t of data.tools) if (t.running && !S.watching[t.running]) follow(t.running, t, false);
@@ -229,6 +229,10 @@ function toolsView() {
         d.name, " · ", daysOld(d.modified) > 3 ? `${Math.floor(daysOld(d.modified))} days old` : "updated " + ago(d.modified)))));
   }
 
+  for (const r of (!q && S.renewals) || []) wrap.append(h("div", { class: "notice warn updates-note", role: "status" },
+    h("div", { style: "flex:1" }, h("strong", {}, `The ${r.name} key: ${renewalText(r).replace(/^Key /, "").replace(/ \(.*\)$/, "")}. `),
+      `Get the new key from the service and paste it on the ${r.name} card.`),
+    h("button", { type: "button", class: "btn small primary", onclick: async () => { S.view = "connections"; await loadVault(); render(); } }, "Open Connections")));
   const up = S.update || {};
   if (up.available && !q && S.updateHidden !== up.version) wrap.append(h("div", { class: "notice ok updates-note", role: "status" },
     h("span", { html: ICON.rocket || ICON.arrow, class: "link-ico" }),
@@ -1890,6 +1894,8 @@ function connectionsView() {
       c.api ? usageLine(c) : null,
       h("div", { class: "chips" },
         c.api ? h("span", { class: "chip" }, "tz.api(): " + ((v.api_presets[c.api.preset] || {}).label || "web service")) : null,
+        c.renewal ? h("span", { class: "chip" + (c.renewal.due ? " old" : ""), title: `Renewed ${c.renewal.renewed}, every ${c.renewal.renew_days} days` },
+          renewalText(c.renewal)) : null,
         h("span", { class: "chip" }, c.scheduled ? "Available to scheduled plans" : "Only while you're here"),
         users.length ? h("span", { class: "chip" }, "Asked for by " + users.join(", ")) : null),
       c.allowed.length ? h("div", { style: "font-size:14px;color:var(--ink-2)" }, "Allowed for: ",
@@ -2011,6 +2017,12 @@ function varName(name, suffix) {
   return base + "_" + suffix;
 }
 
+function renewalText(r) {
+  if (r.days_left < 0) return `Key ran out ${-r.days_left} day${r.days_left === -1 ? "" : "s"} ago`;
+  if (r.days_left === 0) return "Key runs out today";
+  return `Key runs out in ${r.days_left} day${r.days_left === 1 ? "" : "s"} (${r.expires})`;
+}
+
 function openConnection(existing, suggestedName, imported) {
   const T = S.vault.templates;
   const st = {
@@ -2020,6 +2032,7 @@ function openConnection(existing, suggestedName, imported) {
     scheduled: existing ? existing.scheduled : true,
     rows: [], showNames: !!(existing && existing.kind === "custom") || !!imported, error: "", busy: false,
     api: existing && existing.api ? { ...existing.api } : null, apiTouched: !!existing,
+    renew_days: existing ? existing.renew_days || null : null,
   };
   const P = S.vault.api_presets;
   function presetFor(id) {
@@ -2032,6 +2045,7 @@ function openConnection(existing, suggestedName, imported) {
     const id = (st.name || "").replace(/[^a-z]/g, "");
     const match = Object.keys(P).find((k) => k !== "other" && (id === k || (k === "massive" && id === "polygon")));
     st.api = match ? presetFor(match) : null;
+    if (match && P[match].renew_days && !st.renew_days) st.renew_days = P[match].renew_days;
   }
   function rowsFor(kind) {
     return T[kind].variables.map((v) => ({ name: v.name || varName(st.name, v.suffix), suffix: v.suffix || null,
@@ -2067,7 +2081,9 @@ function openConnection(existing, suggestedName, imported) {
     const names = st.rows.map((r) => r.name).filter(Boolean);
     box.append(...[
       h("div", { class: "field" }, h("label", { for: "cn-api-p" }, "Service"),
-        h("select", { id: "cn-api-p", class: "select", onchange: (e) => { st.api = { ...presetFor(e.target.value), key_var: a.key_var }; redrawApi(); } },
+        h("select", { id: "cn-api-p", class: "select", onchange: (e) => { st.api = { ...presetFor(e.target.value), key_var: a.key_var };
+          if (P[e.target.value] && P[e.target.value].renew_days && !st.renew_days) { st.renew_days = P[e.target.value].renew_days; draw(); return; }
+          redrawApi(); } },
           Object.entries(P).map(([k, x]) => h("option", { value: k, selected: k === a.preset }, x.label))),
         h("span", { class: "help" }, p.note)),
       h("div", { class: "field" }, h("label", { for: "cn-api-b" }, "Web address"),
@@ -2140,6 +2156,10 @@ function openConnection(existing, suggestedName, imported) {
         h("span", { class: "help" }, "Plans can use it while you're away. Turn off for anything sensitive, like a bank or broker login.")),
       h("button", { type: "button", class: "switch", "aria-pressed": String(st.scheduled), "aria-labelledby": "cn-sched-l",
         onclick: () => { st.scheduled = !st.scheduled; draw(); } }, h("span", { class: "track" }), h("span", { class: "knob" }))));
+    body.append(h("div", { class: "field" }, h("label", { for: "cn-renew" }, "The key runs out every … days (optional)"),
+      h("input", { id: "cn-renew", class: "input", type: "number", min: "1", max: "3650", style: "max-width:140px",
+        value: st.renew_days || "", placeholder: "for example 30", oninput: (e) => { st.renew_days = e.target.value ? Number(e.target.value) : null; } }),
+      h("span", { class: "help" }, "traPYze then reminds you 5 days before it runs out, counted from the day you last pasted the key.")));
     body.append(h("div", { class: "field" }, h("label", { for: "cn-desc" }, "Note (optional)"),
       h("input", { id: "cn-desc", class: "input", value: st.description, oninput: (e) => { st.description = e.target.value; } })));
     if (st.error) body.append(h("div", { class: "notice warn", role: "alert" }, st.error));
@@ -2163,7 +2183,7 @@ function openConnection(existing, suggestedName, imported) {
     try {
       S.vault = await api("connections/save", { method: "POST", body: { name: st.name, kind: st.kind, values, secret, scheduled: st.scheduled,
         description: st.description, replace_from: existing ? existing.name : null, import_path: imported ? imported.path : null,
-        api: st.api && st.kind !== "email" ? { ...st.api, key_var: keyVar() } : null } });
+        api: st.api && st.kind !== "email" ? { ...st.api, key_var: keyVar() } : null, renew_days: st.renew_days || null } });
       closeModal(); toast(`Saved “${st.name}”.`); render();
     } catch (e) { st.busy = false; st.error = e.message; draw(); }
   }

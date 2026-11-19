@@ -2,6 +2,18 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.16.0] - 2026-11-19
+
+- **Reminders for keys that run out.** On a connection card you can say the key
+  runs out every so many days. From 5 days before, the card, the home screen and
+  a notification tell you, until you paste the new key. The count starts on the
+  day you last saved the key; changing a note or a limit doesn't restart it. It
+  works while the vault is locked too (only names and dates are kept outside it).
+  HF Data Library connections get 30 days by themselves, also ones made earlier.
+- HF Data Library's preset now allows 100 downloads a minute, its real limit.
+- A plan that runs once tomorrow now reads "Once, tomorrow at 09:00", not
+  "Once, on tomorrow at 09:00".
+
 ## [0.15.3] - 2026-11-16
 
 - **Tiingo, HF Data Library and GitHub** are known services under Connections.

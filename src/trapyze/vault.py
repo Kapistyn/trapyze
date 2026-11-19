@@ -29,6 +29,7 @@ import re
 import sys
 import time
 from dataclasses import dataclass, field
+import datetime as _dt
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -201,6 +202,23 @@ def looks_secret(variable: str) -> bool:
 
 
 # ---------------------------------------------------------------- the vault
+def renewal_info(renewed: str | None, renew_days: int | None, today: _dt.date | None = None) -> dict[str, Any] | None:
+    """When a key that's renewed every renew_days days runs out, counted from the day it was last saved."""
+    if not renew_days or not renewed:
+        return None
+    try:
+        since = _dt.date.fromisoformat(str(renewed)[:10])
+    except ValueError:
+        return None
+    due = since + _dt.timedelta(days=int(renew_days))
+    left = (due - (today or _dt.date.today())).days
+    return {"renew_days": int(renew_days), "renewed": since.isoformat(), "expires": due.isoformat(), "days_left": left,
+            "due": left <= REMIND_DAYS}
+
+
+REMIND_DAYS = 5  # start reminding this many days before a key runs out
+
+
 @dataclass
 class Vault:
     folder: Path
@@ -217,8 +235,27 @@ class Vault:
     def away_path(self) -> Path:
         return self.folder / "vault-away.json"
 
+    @property
+    def renewals_path(self) -> Path:
+        """Names and renewal dates only (no secrets), so reminders work while the vault is locked."""
+        return self.folder / "renewals.json"
+
     def exists(self) -> bool:
         return self.path.exists()
+
+    def renewals(self, today: _dt.date | None = None) -> list[dict[str, Any]]:
+        """Connections whose key must be renewed every so many days, soonest first."""
+        try:
+            data = json.loads(self.renewals_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return []
+        today = today or _dt.date.today()
+        out = []
+        for name, r in data.items():
+            info = renewal_info(r.get("renewed"), r.get("renew_days"), today)
+            if info:
+                out.append({"name": name, **info})
+        return sorted(out, key=lambda r: r["days_left"])
 
     @property
     def unlocked(self) -> bool:
@@ -256,6 +293,20 @@ class Vault:
         self._key, self._data = key, data
         self._meta = {k: v for k, v in stored.items() if k != "sealed"}
         self.touch()
+        self._adopt_renewals()
+
+    def _adopt_renewals(self) -> None:
+        """Connections made before reminders existed, for a service whose keys run out (HF Data Library):
+        remind from the day the key was last saved."""
+        from .apis import PRESETS
+        changed = False
+        for c in self._data.get("connections", {}).values():
+            days = PRESETS.get((c.get("api") or {}).get("preset") or "", {}).get("renew_days")
+            if days and not c.get("renew_days"):
+                c["renew_days"], c["renewed"] = days, c.get("renewed") or c.get("updated") or _now()
+                changed = True
+        if changed:
+            self._save()
 
     def lock(self) -> None:
         self._key = None
@@ -293,6 +344,8 @@ class Vault:
         away = {n: c for n, c in self._data["connections"].items() if c.get("scheduled")}
         away_key = hmac.new(device_key(self.folder), b"away", hashlib.sha256).digest()
         _write_json(self.away_path, {"version": VERSION, "sealed": _seal(away_key, {"connections": away}, AWAY_AAD)})
+        _write_json(self.renewals_path, {n: {"renew_days": c["renew_days"], "renewed": c.get("renewed")}
+                                         for n, c in self._data["connections"].items() if c.get("renew_days")})
 
     # Connections -------------------------------------------------------------
     def connections(self) -> list[dict[str, Any]]:
@@ -310,13 +363,16 @@ class Vault:
                 "scheduled": c.get("scheduled", False), "created": c.get("created"), "updated": c.get("updated"),
                 "tested": c.get("tested"), "test_ok": c.get("test_ok"), "api": c.get("api"),
                 "allowed": sorted(t for t, names in self._data["allowed"].items() if name in names),
+                "renew_days": c.get("renew_days"), "renewed": c.get("renewed"),
+                "renewal": renewal_info(c.get("renewed"), c.get("renew_days")),
             })
         return out
 
     def save_connection(self, name: str, kind: str, values: dict[str, str | None], secret: list[str],
                         scheduled: bool, description: str = "", replace_from: str | None = None,
-                        api: dict[str, Any] | None = None) -> None:
-        """Add or change a connection. A value of None keeps the stored value (for editing)."""
+                        api: dict[str, Any] | None = None, renew_days: int | None = None) -> None:
+        """Add or change a connection. A value of None keeps the stored value (for editing).
+        renew_days: the key must be renewed that often (HF Data Library: 30); traPYze reminds you."""
         self._need()
         name = name.strip().lower()
         if not NAME_RE.match(name):
@@ -350,6 +406,13 @@ class Vault:
             "created": (old or {}).get("created", _now()), "updated": _now(),
             "tested": None, "test_ok": None,
         }
+        if renew_days:
+            if not 1 <= int(renew_days) <= 3650:
+                raise VaultError("Renew every: a number of days from 1 to 3650.")
+            record["renew_days"] = int(renew_days)
+        # The renewal clock restarts when a secret value changes, not when a label or a limit does.
+        changed = old is None or any(merged[v] != old["values"].get(v) for v in record["secret"])
+        record["renewed"] = _now() if changed else old.get("renewed") or old.get("updated") or _now()
         if api:
             from .apis import check_api
             record["api"] = check_api(api, list(merged))

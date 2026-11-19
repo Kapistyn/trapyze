@@ -536,6 +536,13 @@ email connection), so the script reads them with `os.environ["FMP_API_KEY"]`.
 
 From the terminal, `trapyze run` asks for the PIN when a tool needs the vault.
 
+## Keys that run out
+
+Some services give keys that stop working after a while (HF Data Library: every
+30 days). Fill in **The key runs out every … days** on the connection, and from
+5 days before, the card, the home screen and a notification remind you. Paste the
+new key with **Change** on the card; the count starts again from that day.
+
 ## Web services: tz.api()
 
 For a data service such as Financial Modeling Prep, turn on **Use with

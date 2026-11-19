@@ -66,9 +66,10 @@ PRESETS: dict[str, dict[str, Any]] = {
     },
     "hfdata": {
         "label": "HF Data Library", "base": "https://api.hfdatalibrary.com/v1",
-        "key_in": "header", "key_name": "X-API-Key", "per_minute": 250, "per_day": 0, "cache_minutes": 0,
-        "test": "symbols", "example": 'tz.api("{name}", "bars/AAPL", params={{"start": "2024-01-02", "end": "2024-01-02"}})',
-        "note": "Free key, 300 calls a minute. The key expires every 30 days: paste the new one here.",
+        "key_in": "header", "key_name": "X-API-Key", "per_minute": 100, "per_day": 0, "cache_minutes": 0,
+        "test": "symbols", "example": 'tz.api("{name}", "bars/AAPL", params={{"version": "clean"}})',
+        "renew_days": 30,
+        "note": "Free key, 100 downloads a minute. The key expires every 30 days: traPYze reminds you 5 days before.",
     },
     "github": {
         "label": "GitHub", "base": "https://api.github.com",

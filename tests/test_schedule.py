@@ -41,7 +41,8 @@ class WhenTests(unittest.TestCase):
         self.assertEqual(sc.next_times(last, FRI, 3), [dt.datetime(2026, 11, 30, 20), dt.datetime(2026, 12, 31, 20), dt.datetime(2027, 1, 31, 20)])
         self.assertEqual(sc.describe(sc.check_when({"kind": "monthly", "day": 2, "time": "06:00"})), "On the 2nd of every month at 06:00")
         once = sc.check_when({"kind": "once", "at": "2026-11-20T09:00"})
-        self.assertEqual(sc.describe(once), "Once, on Friday 20 November 2026 at 09:00")
+        self.assertEqual(sc.describe(once, FRI), "Once, on Friday 20 November 2026 at 09:00")
+        self.assertEqual(sc.describe(once, dt.datetime(2026, 11, 19, 12, 0)), "Once, tomorrow at 09:00")
         self.assertEqual(sc.next_times(once, dt.datetime(2026, 11, 21), 1), [])
         self.assertEqual(sc.nice_time(dt.datetime(2026, 11, 14, 7, 30), FRI), "tomorrow at 07:30")
 
