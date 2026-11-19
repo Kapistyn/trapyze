@@ -2,6 +2,18 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.17.0] - 2026-11-19
+
+- **Shared prices for all tools: `tz.prices()`.** A tool asks for the bars it
+  needs (`tz.prices("SPY", start="2010-01-01")`) and gets a pandas table. One
+  copy is kept in `data/trapyze_prices.sqlite` for every tool, and only what's
+  missing is downloaded, so ten tools asking for the same ticker in a day cost
+  one small download. Dividends and splits are picked up and the older bars
+  rescaled; intraday bars are kept for good, so their history grows past
+  Yahoo's limits; without internet the saved prices are used. Bars from a
+  broker can be stored next to Yahoo's with `tz.save_prices()`.
+- Tools written with *Have an AI write it* now use `tz.prices()` for prices.
+
 ## [0.16.0] - 2026-11-19
 
 - **Reminders for keys that run out.** On a connection card you can say the key

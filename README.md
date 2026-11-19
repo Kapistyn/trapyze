@@ -272,7 +272,7 @@ traPYze is free and stays free. The best ways to help:
 ## Running the tests
 
 ```
-uv run --with pytest python -m pytest -q
+uv run --with pytest --with pandas python -m pytest -q
 ```
 
 No internet needed. See [CONTRIBUTING.md](CONTRIBUTING.md) for more.

@@ -21,6 +21,7 @@ Everything traPYze does, step by step. New here? Start with the [README](../READ
 - [Presets, chains and your own look](#presets-chains-and-your-own-look)
 - [Keys and logins: the vault](#keys-and-logins-the-vault)
 - [Web services: tz.api()](#web-services-tzapi)
+- [Shared prices: tz.prices()](#shared-prices-tzprices)
 - [Inside the script](#inside-the-script)
 - [Prompt for AI-written tools](#prompt-for-ai-written-tools)
 - [Before the first run](#before-the-first-run)
@@ -583,6 +584,42 @@ shared limits.
 The `cryptography` package is the one thing traPYze installs alongside
 itself, so the first install needs an internet connection.
 
+## Shared prices: tz.prices()
+
+Several tools that each download the same SPY or VIX history waste time and
+bandwidth. `tz.prices()` keeps one copy for all of them, in
+`data/trapyze_prices.sqlite`:
+
+```python
+import trapyze_helper as tz
+
+spy = tz.prices("SPY", start="2010-01-01")              # daily bars
+es = tz.prices("ES=F", interval="1h")                    # hourly bars
+total = tz.prices("SPY", start="2010-01-01", adjusted=True)  # adjusted for dividends
+```
+
+- Tickers are written as on Yahoo Finance (`SPY`, `^GSPC`, `ASML.AS`,
+  `EURUSD=X`, `ES=F`). The tool needs `yfinance` and `pandas` under
+  `dependencies`.
+- Only what's missing is downloaded: older history once, and newer bars when
+  the saved ones are more than 6 hours old (15 minutes for intraday bars;
+  change it with `refresh_hours=`). Each update looks a week back again, so
+  corrections, dividends and splits are picked up, and the older bars are
+  rescaled to match.
+- Two tools asking for the same ticker at once: one downloads, the other waits
+  a moment and reads what it saved.
+- Intraday bars are kept for good. Yahoo only gives the last 60 days of
+  15-minute bars and 2 years of hourly bars; the shared copy keeps growing.
+- Without an internet connection, the saved prices are used and the log says
+  so.
+- Bars from somewhere else, such as a broker, go in with
+  `tz.save_prices("SPY", table, interval="30m", source="lynx")` and come back
+  with `tz.prices("SPY", interval="30m", source="lynx")`. They are kept apart
+  from Yahoo's. `tz.price_range("SPY", "30m", "lynx")` tells what is there, so a
+  tool can fetch only the newer part.
+- Don't list `trapyze_prices.sqlite` under `writes`: that would make tools wait
+  for each other, and the price cache handles sharing itself.
+
 ## Inside the script
 
 Use the helper (optional, but it makes the most of traPYze):
@@ -627,6 +664,9 @@ How a traPYze tool works:
 - In the code: `import trapyze_helper as tz`; read options with `tz.settings()`; report progress with
   `tz.progress(fraction, "what it's doing in plain words")`; save results with `tz.output_path(name)`;
   shared data files go in `tz.data_path(name)` and are listed as `writes = [...]` in the label.
+- For stock, index, fund, currency or futures prices use `tz.prices(ticker, start=..., interval="1d")`
+  (Yahoo tickers; needs `yfinance` and `pandas` under `dependencies`). It returns a pandas table and keeps
+  one shared copy for all tools, so only missing bars are downloaded. Don't list it under `writes`.
 - Never use `input()`. Never hard-code paths or keys. Keys come from the vault: list the connection
   name under `connections = [...]` in the label and read it from `os.environ`, or call a web service
   with `tz.api(name, path, params={...})`, which adds the key.
