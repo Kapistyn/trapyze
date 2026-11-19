@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   version:
@@ -96,3 +97,6 @@ jobs:
           gh release create "$TAG" rel/* \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "traPYze ${TAG#v}" --notes-file out/notes/notes.md --latest
+      - name: Also publish on PyPI (when the PYPI_PUBLISH variable is "true")
+        if: ${{ vars.PYPI_PUBLISH == 'true' }}
+        run: gh workflow run pypi.yml --repo "$GITHUB_REPOSITORY" -f tag="$TAG"

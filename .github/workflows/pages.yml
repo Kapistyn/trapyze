@@ -1,0 +1,46 @@
+name: website
+
+# Builds the website (https://<owner>.github.io/trapyze/) from README.md, docs/guide.md and
+# CHANGELOG.md with tools/build_site.py, and publishes it on GitHub Pages.
+# One-time setup: Settings, Pages, Source: "GitHub Actions".
+on:
+  push:
+    branches: [main]
+    paths: ["README.md", "CHANGELOG.md", "docs/**", "tools/build_site.py", "pyproject.toml", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Build the site
+        env:
+          GOOGLE_SITE_VERIFICATION: ${{ vars.GOOGLE_SITE_VERIFICATION }}
+          BING_SITE_VERIFICATION: ${{ vars.BING_SITE_VERIFICATION }}
+        run: |
+          pip install markdown
+          python tools/build_site.py _site "$GITHUB_REPOSITORY"
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: _site }
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

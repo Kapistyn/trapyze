@@ -46,3 +46,9 @@ The release workflow checks the version, tests, builds the wheel and
 traPYze-Setup.exe, makes the tag if needed, and publishes them with the
 install scripts. A version that is already out is never published twice. Every traPYze out there then offers
 the update by itself.
+
+When the repository variable `PYPI_PUBLISH` is `true`, the release also goes to
+PyPI through the *pypi* workflow (trusted publishing, no token stored). To put a
+version that is already out on PyPI, run *pypi* on the Actions tab with its tag.
+The website (`tools/build_site.py`, workflow *website*) rebuilds by itself when
+the README, the guide or the changelog change on main.
