@@ -2,6 +2,16 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.17.5] - 2026-11-20
+
+- **One .env file for all your keys.** In Connections, "Import a .env file" has a
+  new button, "Sort keys into services". traPYze recognises the variable names of
+  the services it knows (HF Data Library, Tiingo, FMP, Alpha Vantage, Twelve Data,
+  Finnhub, EODHD, Massive, GitHub), shows only the names, and puts each key into
+  the connection with the service's name, with its limits and "Use with
+  tz.api()" already on. A key that changed replaces the stored one; the others
+  stay as they are. Variables it doesn't know are listed, not imported.
+
 ## [0.17.4] - 2026-11-19
 
 - **traPYze has a website**: <https://kapistyn.github.io/trapyze/>, with the

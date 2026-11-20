@@ -32,6 +32,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from .. import __version__
 from ..apis import PRESETS, helper, run_config
+from ..envmatch import match as match_env
 from ..freshness import checks, disk_free
 from ..schedule import NeedsPassword, Plans, System, check_when, describe, nice_time, next_times, sync as sync_plan
 from ..home import Home
@@ -963,6 +964,49 @@ class App:
         self._renewal_told = ""  # a renewed key: tell again when the next one is due
         return self.vault_state()
 
+    def _env_existing(self) -> dict[str, dict[str, Any]]:
+        out: dict[str, dict[str, Any]] = {}
+        for c in self.vault.connections():
+            api_cfg = c.get("api") or {}
+            key_var = api_cfg.get("key_var") or next((v["name"] for v in c["variables"] if v["secret"]), "")
+            values = self.vault.values(c["name"])
+            out[c["name"]] = {"key_var": key_var, "current": values.get(key_var)}
+        return out
+
+    def env_plan(self, path: str) -> dict[str, Any]:
+        found = parse_env_file(path)
+        with self.vault_lock:
+            plan = match_env(found, self._env_existing())
+        plan["count"] = len(found)
+        return plan
+
+    def env_apply(self, path: str, chosen: list[str], scheduled: bool) -> dict[str, Any]:
+        """chosen: the variable names to take from the file. Values are read here and never leave this process."""
+        found = parse_env_file(path)
+        done: list[str] = []
+        with self.vault_lock:
+            plan = match_env(found, self._env_existing())
+            for it in plan["items"]:
+                if it["var"] not in chosen or it["action"] == "same" or it["empty"]:
+                    continue
+                name, var, value = it["name"], it["key_var"], found[it["var"]]
+                if it["action"] == "update":
+                    old = next(c for c in self.vault.connections() if c["name"] == name)
+                    values = {v["name"]: None for v in old["variables"]}
+                    values[var] = value
+                    self.vault.save_connection(name, old["kind"], values, [v["name"] for v in old["variables"] if v["secret"]],
+                                               bool(old.get("scheduled")), old.get("description", ""), name,
+                                               api=old.get("api"), renew_days=old.get("renew_days"))
+                else:
+                    preset = PRESETS[it["preset"]]
+                    self.vault.save_connection(name, "api_key", {var: value}, [var], scheduled, f"{preset['label']} (from .env)",
+                                               api={"preset": it["preset"], "key_var": var}, renew_days=preset.get("renew_days"))
+                done.append(name)
+        self._renewal_told = ""
+        state = self.vault_state()
+        state["imported"] = done
+        return state
+
     def delete_connection(self, name: str) -> dict[str, Any]:
         with self.vault_lock:
             self.vault.delete_connection(name)
@@ -1229,6 +1273,10 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(HTTPStatus.OK, app.clear_cache(str(body.get("name", ""))))
                 if parts[1] == "disallow":
                     return self._json(HTTPStatus.OK, app.disallow(str(body.get("tool", "")), str(body.get("name", ""))))
+                if parts[1] == "env-plan":
+                    return self._json(HTTPStatus.OK, app.env_plan(str(body.get("path", ""))))
+                if parts[1] == "env-apply":
+                    return self._json(HTTPStatus.OK, app.env_apply(str(body.get("path", "")), [str(x) for x in body.get("chosen") or []], bool(body.get("scheduled", True))))
                 if parts[1] == "preview-env":
                     found = parse_env_file(str(body.get("path", "")))
                     return self._json(HTTPStatus.OK, {"variables": [{"name": k, "secret": looks_secret(k), "set": bool(v)} for k, v in found.items()]})

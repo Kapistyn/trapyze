@@ -140,6 +140,24 @@ class WebTests(unittest.TestCase):
         self.assertEqual(second[0], 409)
         self.assertIn("still writing", second[1]["error"])
 
+    def test_env_file_sorted_into_services(self):
+        env = self.home.scripts.parent / "all.env"
+        env.write_text("TIINGO_API_KEY=tt-111\nFMP_API_KEY=ff-222\nOPENAI_API_KEY=oo-333\n")
+        self.request("POST", "/api/vault/create", {"pin": "917364"})
+        status, plan = self.request("POST", "/api/connections/env-plan", {"path": str(env)})
+        self.assertEqual(status, 200)
+        self.assertEqual({i["preset"] for i in plan["items"]}, {"tiingo", "fmp"})
+        self.assertNotIn("tt-111", json.dumps(plan))
+        state = self.request("POST", "/api/connections/env-apply",
+                             {"path": str(env), "chosen": ["TIINGO_API_KEY", "FMP_API_KEY"], "scheduled": True})[1]
+        self.assertEqual(sorted(state["imported"]), ["fmp", "tiingo"])
+        names = {c["name"]: c for c in state["connections"]}
+        self.assertEqual(names["tiingo"]["api"]["preset"], "tiingo")
+        self.assertNotIn("tt-111", json.dumps(state))
+        env.write_text("TIINGO_API_KEY=tt-999\n")
+        plan = self.request("POST", "/api/connections/env-plan", {"path": str(env)})[1]
+        self.assertEqual(plan["items"][0]["action"], "update")
+
     def test_vault_flow_unlock_allow_and_masking(self):
         (self.home.scripts / "uses_key.py").write_text(
             '# /// script\n# [tool.trapyze]\n# connections = ["fmp"]\n# ///\n'

@@ -182,7 +182,7 @@ def default_variable(name: str, suffix: str) -> str:
 def parse_env_file(path: str | Path) -> dict[str, str]:
     """Read KEY=VALUE lines, as in a .env file. Comments and blank lines are skipped."""
     values: dict[str, str] = {}
-    for raw in Path(path).read_text(encoding="utf-8").splitlines():
+    for raw in Path(path).read_text(encoding="utf-8-sig").splitlines():
         line = raw.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue

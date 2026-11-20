@@ -2218,6 +2218,7 @@ function openConnection(existing, suggestedName, imported) {
   draw(); showModal(dialog);
 }
 
+const PRESET_LABEL = { hfdata: "HF Data Library", tiingo: "Tiingo", fmp: "Financial Modeling Prep", alphavantage: "Alpha Vantage", twelvedata: "Twelve Data", finnhub: "Finnhub", eodhd: "EODHD", massive: "Massive (Polygon)", github: "GitHub" };
 function openImportEnv(initial) {
   let error = "";
   const dialog = h("section", { class: "dialog narrow", role: "dialog", "aria-modal": "true", "aria-labelledby": "ie-title" });
@@ -2233,7 +2234,54 @@ function openImportEnv(initial) {
         error ? h("div", { class: "notice warn", role: "alert" }, error) : null,
         h("p", { class: "help", style: "margin:0" }, "Afterwards you can delete the original file, so the keys only live in the vault.")),
       h("footer", {}, h("span", {}), h("div", { class: "right" }, h("button", { type: "button", class: "btn", onclick: closeModal }, "Cancel"),
-        h("button", { type: "button", class: "btn primary", onclick: next }, "Read the file"))));
+        h("button", { type: "button", class: "btn", onclick: next }, "One connection from this file"),
+        h("button", { type: "button", class: "btn primary", onclick: sort }, "Sort keys into services"))));
+  }
+  async function sort() {
+    try {
+      const plan = await api("connections/env-plan", { method: "POST", body: { path: path.value } });
+      if (!plan.count) { error = "No KEY=VALUE lines found in that file."; draw(); return; }
+      pickItems(plan);
+    } catch (e) { error = e.message; draw(); }
+  }
+  function pickItems(plan) {
+    const chosen = new Set(plan.items.filter((i) => i.action !== "same" && !i.empty).map((i) => i.var));
+    let scheduled = true, busy = false, err = "";
+    const words = { new: "New connection", update: "Replaces the stored key", same: "Already the same" };
+    function drawPick() {
+      dialog.replaceChildren(
+        h("header", {}, h("div", { class: "titles" }, h("h1", { id: "ie-title" }, "Keys found in the file"),
+          h("p", {}, "Only the names are shown. The values go straight from the file into the vault.")),
+          h("button", { type: "button", class: "x", "aria-label": "Close", onclick: closeModal, html: ICON.close })),
+        h("div", { class: "body" },
+          plan.items.length ? h("div", { class: "field" }, plan.items.map((i) => h("label", { style: "display:flex;align-items:center;gap:10px;padding:6px 0" },
+            h("input", { type: "checkbox", checked: chosen.has(i.var), disabled: i.action === "same" || i.empty,
+              onchange: (e) => { e.target.checked ? chosen.add(i.var) : chosen.delete(i.var); } }),
+            h("span", {}, h("strong", {}, (PRESET_LABEL[i.preset] || i.preset)), " ",
+              h("span", { class: "help", style: "font-family:var(--mono)" }, i.var), " · ",
+              h("span", { class: "help" }, i.empty ? "Empty in the file" : words[i.action])))))
+            : h("div", { class: "notice warn" }, "None of the names matched a service traPYze knows."),
+          plan.other.length ? h("details", {}, h("summary", {}, `${plan.other.length} not imported`),
+            h("ul", { class: "help" }, plan.other.map((o) => h("li", {}, h("span", { style: "font-family:var(--mono)" }, o.name), " · ", o.why)))) : null,
+          h("div", { class: "toggle-row" },
+            h("div", { class: "t" }, h("span", { id: "ie-sched" }, "New connections: available to scheduled plans"),
+              h("span", { class: "help" }, "Existing connections keep their own setting.")),
+            h("button", { type: "button", class: "switch", "aria-pressed": String(scheduled), "aria-labelledby": "ie-sched",
+              onclick: () => { scheduled = !scheduled; drawPick(); } }, h("span", { class: "track" }), h("span", { class: "knob" }))),
+          err ? h("div", { class: "notice warn", role: "alert" }, err) : null,
+          h("p", { class: "help", style: "margin:0" }, "Tools find a key by the connection's name (for example hfdata, tiingo, github). The first time a tool uses one, traPYze asks you to allow it.")),
+        h("footer", {}, h("span", {}), h("div", { class: "right" },
+          h("button", { type: "button", class: "btn", onclick: closeModal }, "Cancel"),
+          h("button", { type: "button", class: "btn primary", disabled: busy || !chosen.size, onclick: apply }, busy ? "Saving…" : "Save into the vault"))));
+    }
+    async function apply() {
+      busy = true; err = ""; drawPick();
+      try {
+        S.vault = await api("connections/env-apply", { method: "POST", body: { path: path.value, chosen: [...chosen], scheduled } });
+        closeModal(); toast(`Saved ${S.vault.imported.length} connection${S.vault.imported.length === 1 ? "" : "s"}.`); render();
+      } catch (e) { busy = false; err = e.message; drawPick(); }
+    }
+    drawPick();
   }
   async function next() {
     try {
