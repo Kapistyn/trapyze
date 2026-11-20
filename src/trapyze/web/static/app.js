@@ -2245,7 +2245,8 @@ function openImportEnv(initial) {
     } catch (e) { error = e.message; draw(); }
   }
   function pickItems(plan) {
-    const chosen = new Set(plan.items.filter((i) => i.action !== "same" && !i.empty).map((i) => i.var));
+    const chosen = new Set([...plan.items.filter((i) => i.action !== "same" && !i.empty).map((i) => i.var),
+      ...plan.groups.filter((g) => g.action !== "same" && !g.empty).map((g) => "g:" + g.name)]);
     let scheduled = true, busy = false, err = "";
     const words = { new: "New connection", update: "Replaces the stored key", same: "Already the same" };
     function drawPick() {
@@ -2260,8 +2261,14 @@ function openImportEnv(initial) {
             h("span", {}, h("strong", {}, (PRESET_LABEL[i.preset] || i.preset)), " ",
               h("span", { class: "help", style: "font-family:var(--mono)" }, i.var), " · ",
               h("span", { class: "help" }, i.empty ? "Empty in the file" : words[i.action])))))
-            : h("div", { class: "notice warn" }, "None of the names matched a service traPYze knows."),
-          plan.other.length ? h("details", {}, h("summary", {}, `${plan.other.length} not imported`),
+            : null,
+          plan.groups.length ? h("div", { class: "field" }, h("label", {}, "Other keys, each group becomes one connection"),
+            plan.groups.map((g) => h("label", { style: "display:flex;align-items:flex-start;gap:10px;padding:6px 0" },
+              h("input", { type: "checkbox", checked: chosen.has("g:" + g.name), disabled: g.action === "same" || g.empty, style: "margin-top:4px",
+                onchange: (e) => { e.target.checked ? chosen.add("g:" + g.name) : chosen.delete("g:" + g.name); } }),
+              h("span", {}, h("strong", {}, g.name), " · ", h("span", { class: "help" }, g.empty ? "Empty in the file" : words[g.action === "update" ? "update" : g.action]),
+                h("br"), h("span", { class: "help", style: "font-family:var(--mono)" }, g.vars.map((v) => v.var).join(", ")))))) : null,
+          plan.other.length ? h("details", {}, h("summary", {}, `${plan.other.length} left out`),
             h("ul", { class: "help" }, plan.other.map((o) => h("li", {}, h("span", { style: "font-family:var(--mono)" }, o.name), " · ", o.why)))) : null,
           h("div", { class: "toggle-row" },
             h("div", { class: "t" }, h("span", { id: "ie-sched" }, "New connections: available to scheduled plans"),

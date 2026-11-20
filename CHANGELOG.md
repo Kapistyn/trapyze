@@ -2,6 +2,14 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.17.6] - 2026-11-20
+
+- **The .env import takes the keys it doesn't know too.** Variables that match no
+  service become connections of their own, grouped by name: everything starting
+  with `TELEGRAM_` in one connection, `EMAIL_` and `SMTP_` in one, a single key
+  such as `TAVILY_API_KEY` in `tavily`. Tools use them by that name. Keys that
+  look secret are stored as secret; placeholders like `YOUR_API_KEY` are left out.
+
 ## [0.17.5] - 2026-11-20
 
 - **One .env file for all your keys.** In Connections, "Import a .env file" has a

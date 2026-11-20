@@ -970,7 +970,7 @@ class App:
             api_cfg = c.get("api") or {}
             key_var = api_cfg.get("key_var") or next((v["name"] for v in c["variables"] if v["secret"]), "")
             values = self.vault.values(c["name"])
-            out[c["name"]] = {"key_var": key_var, "current": values.get(key_var)}
+            out[c["name"]] = {"key_var": key_var, "current": values.get(key_var), "kind": c["kind"], "values": values}
         return out
 
     def env_plan(self, path: str) -> dict[str, Any]:
@@ -1001,6 +1001,22 @@ class App:
                     preset = PRESETS[it["preset"]]
                     self.vault.save_connection(name, "api_key", {var: value}, [var], scheduled, f"{preset['label']} (from .env)",
                                                api={"preset": it["preset"], "key_var": var}, renew_days=preset.get("renew_days"))
+                done.append(name)
+            for g in plan["groups"]:
+                if "g:" + g["name"] not in chosen or g["action"] == "same" or g["empty"]:
+                    continue
+                name = g["name"]
+                live = [v for v in g["vars"] if not v["empty"]]
+                old = next((c for c in self.vault.connections() if c["name"] == name), None)
+                values = {v["name"]: None for v in old["variables"]} if old else {}
+                secret = [v["name"] for v in old["variables"] if v["secret"]] if old else []
+                for v in live:
+                    values[v["var"]] = found[v["var"]]
+                    if v["secret"] and v["var"] not in secret:
+                        secret.append(v["var"])
+                self.vault.save_connection(name, "custom", values, secret, bool(old.get("scheduled")) if old else scheduled,
+                                           old.get("description", "") if old else "From a .env file", name if old else None,
+                                           api=old.get("api") if old else None, renew_days=old.get("renew_days") if old else None)
                 done.append(name)
         self._renewal_told = ""
         state = self.vault_state()

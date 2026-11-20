@@ -9,6 +9,7 @@ def test_matches_names_and_flags_the_rest():
     by = {i["preset"]: i for i in plan["items"]}
     assert by["tiingo"]["action"] == "same" and by["github"]["action"] == "update" and by["fmp"]["action"] == "new"
     assert by["hfdata"]["var"] == "HF_API_KEY"
-    names = {o["name"] for o in plan["other"]}
-    assert {"OPENAI_API_KEY", "FMP_BASE_URL", "HFDATA_KEY", "EMPTY_TOKEN"} <= names
+    assert {"HFDATA_KEY"} == {o["name"] for o in plan["other"]}  # a second hfdata key is left out
+    grouped = {v["var"] for g in plan["groups"] for v in g["vars"]}
+    assert {"OPENAI_API_KEY", "FMP_BASE_URL", "EMPTY_TOKEN"} <= grouped
     assert "t1" not in str(plan) and "old" not in str(plan)

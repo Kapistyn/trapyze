@@ -24,6 +24,21 @@ RULES: list[tuple[str, str]] = [
 NOT_A_KEY = re.compile(r"(URL|HOST|PORT|USER(NAME)?$|EMAIL|PATH|DIR|REGION|MODEL)", re.I)
 
 
+PLACEHOLDER = re.compile(r"^(YOUR_|CHANGE_?ME|XXX)", re.I)
+MERGE = {"SMTP": "email", "EMAIL": "email", "USER": "email"}  # these prefixes end up in one "email" connection
+TRIM = re.compile(r"_(API_?KEY|KEY|TOKEN|SECRET|PASSWORD|JWT_SECRET)$", re.I)
+
+
+def _group_name(var: str, sizes: dict[str, int]) -> str:
+    prefix = var.upper().split("_")[0]
+    if prefix in MERGE and var.upper() not in ("USER_EMAIL",) or (prefix == "USER" and var.upper() == "USER_EMAIL"):
+        return "email"
+    if sizes.get(prefix, 0) >= 2:
+        return prefix.lower()
+    base = TRIM.sub("", var) or var
+    return re.sub(r"[^a-z0-9_-]+", "_", base.lower()).strip("_")[:64] or "imported"
+
+
 def match(variables: dict[str, str], existing: dict[str, dict[str, Any]]) -> dict[str, Any]:
     """existing: connection name -> {"key_var", "current" (its stored key value or None)}.
     Returns names only: what would be created, changed, left alone, or isn't recognised."""
@@ -50,4 +65,31 @@ def match(variables: dict[str, str], existing: dict[str, dict[str, Any]]) -> dic
         else:
             other.append({"name": var, "secret": looks_secret(var), "empty": not value,
                           "why": "Not one of the services traPYze knows."})
-    return {"items": items, "other": other}
+    # Everything not recognised becomes its own connection; related variables (same first word) go together.
+    sizes: dict[str, int] = {}
+    for o in other:
+        if o["name"].upper().startswith("YOUR_") or PLACEHOLDER.match(variables.get(o["name"], "")):
+            continue
+        prefix = o["name"].upper().split("_")[0]
+        sizes[prefix] = sizes.get(prefix, 0) + 1
+    groups: dict[str, dict[str, Any]] = {}
+    skipped: list[dict[str, Any]] = []
+    for o in other:
+        var = o["name"]
+        if o.get("why", "").startswith("A second") or var.upper().startswith("YOUR_") or PLACEHOLDER.match(variables.get(var, "")):
+            skipped.append({"name": var, "why": o.get("why") or "Looks like a placeholder, not a real key."})
+            continue
+        name = _group_name(var, sizes)
+        have = existing.get(name)
+        if have and have.get("kind") not in (None, "custom"):
+            name += "-env"
+        g = groups.setdefault(name, {"name": name, "vars": [], "exists": (existing.get(name) or {}).get("values") is not None})
+        g["vars"].append({"var": var, "secret": looks_secret(var), "empty": not variables.get(var)})
+    out = []
+    for g in groups.values():
+        cur = (existing.get(g["name"]) or {}).get("values") or {}
+        live = [v for v in g["vars"] if not v["empty"]]
+        g["action"] = ("new" if not g["exists"] else "same" if all(cur.get(v["var"]) == variables[v["var"]] for v in live) else "update")
+        g["empty"] = not live
+        out.append(g)
+    return {"items": items, "groups": out, "other": skipped}

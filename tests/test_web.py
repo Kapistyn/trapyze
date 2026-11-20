@@ -142,15 +142,18 @@ class WebTests(unittest.TestCase):
 
     def test_env_file_sorted_into_services(self):
         env = self.home.scripts.parent / "all.env"
-        env.write_text("TIINGO_API_KEY=tt-111\nFMP_API_KEY=ff-222\nOPENAI_API_KEY=oo-333\n")
+        env.write_text("TIINGO_API_KEY=tt-111\nFMP_API_KEY=ff-222\nTELEGRAM_BOT_TOKEN=bb-1\nTELEGRAM_HOME_CHANNEL=42\nTAVILY_API_KEY=tv-3\nYOUR_API_KEY=your_key\n")
         self.request("POST", "/api/vault/create", {"pin": "917364"})
         status, plan = self.request("POST", "/api/connections/env-plan", {"path": str(env)})
         self.assertEqual(status, 200)
         self.assertEqual({i["preset"] for i in plan["items"]}, {"tiingo", "fmp"})
         self.assertNotIn("tt-111", json.dumps(plan))
+        self.assertEqual({g["name"] for g in plan["groups"]}, {"telegram", "tavily"})
         state = self.request("POST", "/api/connections/env-apply",
-                             {"path": str(env), "chosen": ["TIINGO_API_KEY", "FMP_API_KEY"], "scheduled": True})[1]
-        self.assertEqual(sorted(state["imported"]), ["fmp", "tiingo"])
+                             {"path": str(env), "chosen": ["TIINGO_API_KEY", "FMP_API_KEY", "g:telegram", "g:tavily"], "scheduled": True})[1]
+        self.assertEqual(sorted(state["imported"]), ["fmp", "tavily", "telegram", "tiingo"])
+        tg = {c["name"]: c for c in state["connections"]}["telegram"]
+        self.assertEqual({v["name"]: v["secret"] for v in tg["variables"]}, {"TELEGRAM_BOT_TOKEN": True, "TELEGRAM_HOME_CHANNEL": False})
         names = {c["name"]: c for c in state["connections"]}
         self.assertEqual(names["tiingo"]["api"]["preset"], "tiingo")
         self.assertNotIn("tt-111", json.dumps(state))
