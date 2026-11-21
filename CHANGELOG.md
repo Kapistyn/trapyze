@@ -2,6 +2,14 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.17.8] - 2026-11-21
+
+- **Remove, from a tile's menu.** A tool's ⋯ menu now ends with "Remove…" (for a
+  tool in a program: "Remove the program…", all its scripts together). Nothing is
+  deleted at once: it goes into a bin for 30 days. **More, Recently removed…**
+  lists what's there, with "Put back". A chain's menu has "Delete…" too.
+  A running tool can't be removed, and planned runs wait until you put it back.
+
 ## [0.17.7] - 2026-11-21
 
 - **Shared data takes up one line instead of a row of chips.** The main page shows

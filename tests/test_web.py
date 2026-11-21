@@ -140,6 +140,33 @@ class WebTests(unittest.TestCase):
         self.assertEqual(second[0], 409)
         self.assertIn("still writing", second[1]["error"])
 
+    def test_remove_tool_goes_to_bin_and_comes_back(self):
+        f = self.home.scripts / "gone_soon.py"
+        f.write_text('# /// script\n# [tool.trapyze]\n# name = "Gone soon"\n# ///\nprint("hi")\n')
+        status, state = self.request("POST", "/api/bin/remove", {"tool": "gone_soon"})
+        self.assertEqual(status, 200)
+        self.assertFalse(f.exists())
+        self.assertNotIn("gone_soon", [t["id"] for t in state["tools"]])
+        items = self.request("GET", "/api/bin/list")[1]["items"]
+        self.assertEqual([i["name"] for i in items], ["Gone soon"])
+        self.assertEqual(items[0]["days_left"], 30)
+        status, back = self.request("POST", "/api/bin/restore", {"id": items[0]["id"]})
+        self.assertEqual((status, back["restored"]), (200, "Gone soon"))
+        self.assertTrue(f.exists())
+        self.assertEqual(self.request("GET", "/api/bin/list")[1]["items"], [])
+
+    def test_bin_forgets_after_thirty_days(self):
+        import json as _j, time as _t
+        f = self.home.scripts / "old_one.py"
+        f.write_text('# /// script\n# [tool.trapyze]\n# ///\nprint(1)\n')
+        self.request("POST", "/api/bin/remove", {"tool": "old_one"})
+        slot = next((self.home.internal / "bin").iterdir())
+        info = _j.loads((slot / "info.json").read_text())
+        info["removed"] = _t.time() - 31 * 86400
+        (slot / "info.json").write_text(_j.dumps(info))
+        self.assertEqual(self.request("GET", "/api/bin/list")[1]["items"], [])
+        self.assertFalse(slot.exists())
+
     def test_env_file_sorted_into_services(self):
         env = self.home.scripts.parent / "all.env"
         env.write_text("TIINGO_API_KEY=tt-111\nFMP_API_KEY=ff-222\nTELEGRAM_BOT_TOKEN=bb-1\nTELEGRAM_HOME_CHANNEL=42\nTAVILY_API_KEY=tv-3\nYOUR_API_KEY=your_key\n")

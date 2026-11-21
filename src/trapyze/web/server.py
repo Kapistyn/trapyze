@@ -32,6 +32,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from .. import __version__
 from ..apis import PRESETS, helper, run_config
+from ..bin import Bin, BinError
 from ..envmatch import match as match_env
 from ..freshness import checks, disk_free
 from ..schedule import NeedsPassword, Plans, System, check_when, describe, nice_time, next_times, sync as sync_plan
@@ -122,6 +123,7 @@ class App:
         self.vault_lock = threading.Lock()
         self.presets = Presets(home.internal)
         self.chains = Chains(home.internal)
+        self.bin = Bin(home)
         self.looks = Looks(home.internal)
         self.layout = Layout(home.internal)
         self._suggest_cache: dict[tuple[str, float], str] = {}
@@ -1023,6 +1025,21 @@ class App:
         state["imported"] = done
         return state
 
+    def remove_tool(self, tool_id: str, whole_program: bool) -> dict[str, Any]:
+        tool = self.home.find(tool_id)
+        with self.lock:
+            if any(lr.run.running and (lr.run.tool.id == tool.id or (tool.group and lr.run.tool.group == tool.group))
+                   for lr in self.runs.values()):
+                raise BinError(f"{tool.name} is running. Wait until it has finished.")
+        if tool.group:
+            if not whole_program:
+                raise BinError("This script is part of a program. Remove the whole program, or hide just this tile.")
+            name = (self.home.programs().get(tool.group) or {}).get("name") or tool.group
+            self.bin.put(tool.group, name, "program")
+        else:
+            self.bin.put(tool.path.relative_to(self.home.scripts).as_posix(), tool.name, "tool")
+        return self.tools()
+
     def delete_connection(self, name: str) -> dict[str, Any]:
         with self.vault_lock:
             self.vault.delete_connection(name)
@@ -1559,6 +1576,18 @@ class Handler(BaseHTTPRequestHandler):
                 app.layout_call(parts[1], self._body())
                 return self._json(HTTPStatus.OK, app.tools())
             except (StoreError, ValueError, TypeError) as exc:
+                return self._error(HTTPStatus.BAD_REQUEST, str(exc))
+        if parts and parts[0] == "bin" and len(parts) == 2:
+            try:
+                if method == "GET" and parts[1] == "list":
+                    return self._json(HTTPStatus.OK, {"items": app.bin.items()})
+                if method == "POST" and parts[1] == "remove":
+                    body = self._body()
+                    return self._json(HTTPStatus.OK, app.remove_tool(str(body.get("tool", "")), bool(body.get("program"))))
+                if method == "POST" and parts[1] == "restore":
+                    name = app.bin.restore(str(self._body().get("id", "")))
+                    return self._json(HTTPStatus.OK, {"restored": name, **app.tools()})
+            except (BinError, LookupError, OSError) as exc:
                 return self._error(HTTPStatus.BAD_REQUEST, str(exc))
         if method == "POST" and parts[0] == "programs" and len(parts) == 2 and parts[1] in ("tidy", "visibility"):
             from ..importer import ImportProblem, tidy

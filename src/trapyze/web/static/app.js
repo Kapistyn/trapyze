@@ -216,6 +216,7 @@ function toolsView() {
         { label: "New tool from a template…", run: () => openNewTool() },
         { label: "Have an AI write a tool…", run: () => openAIWrite() },
         { label: "Open the scripts folder", run: () => openPath(S.home + "/scripts") },
+        { label: "Recently removed…", run: () => openBin() },
         S.tools.length > 1 ? { label: "New chain…", run: () => openChainEditor(null) } : null,
         { sep: true },
         { label: "Add a shelf…", run: () => askShelfName(null) },
@@ -494,10 +495,50 @@ function tileMenu(it, anchor) {
       if (prog.readme) items.push({ label: "Read me", run: () => openPath(`${S.home}/scripts/${o.group}/${prog.readme}`) });
       items.push({ label: "Open the program folder", run: () => openPath(`${S.home}/scripts/${o.group}`) });
     }
+    items.push({ sep: true }, { label: o.group ? "Remove the program…" : "Remove…", run: () => confirmRemove(o) });
   } else {
-    items.push({ label: "Change the chain", run: () => openChainEditor(o) }, { label: "Plan it", run: () => openPlanEditor(null, { target_kind: "chain", target: o.id }) });
+    items.push({ label: "Change the chain", run: () => openChainEditor(o) }, { label: "Plan it", run: () => openPlanEditor(null, { target_kind: "chain", target: o.id }) },
+      { sep: true }, { label: "Delete…", run: () => confirmChainDelete(o) });
   }
   openMenu(anchor, items);
+}
+
+function confirmRemove(o) {
+  const prog = o.group ? (S.programs || {})[o.group] || { name: o.group } : null;
+  const inProgram = prog ? S.tools.filter((t) => t.group === o.group) : [];
+  const plans = ((S.schedule || {}).plans || []).filter((p) => p.target_kind === "tool" && (p.target === o.id || inProgram.some((t) => t.id === p.target)));
+  const dialog = h("section", { class: "dialog narrow", role: "dialog", "aria-modal": "true", "aria-labelledby": "rm-title" },
+    h("header", {}, h("div", { class: "titles" }, h("h1", { id: "rm-title" }, prog ? `Remove the program “${prog.name}”?` : `Remove “${o.name}”?`),
+      h("p", {}, prog ? `All ${inProgram.length} of its scripts go into the bin together.` : "The script goes into the bin."))),
+    h("div", { class: "body" },
+      h("p", { class: "help", style: "margin:0" }, "It stays in the bin for 30 days, and you can put it back from More, Recently removed. Results, shared data and settings you made are not touched."),
+      plans.length ? h("div", { class: "notice warn" }, `Planned: ${plans.map((p) => p.name).join(", ")}. The plan stays, but can't run until you put the tool back or delete the plan.`) : null),
+    h("footer", {}, h("button", { type: "button", class: "btn", autofocus: true, onclick: closeModal }, "Keep it"),
+      h("button", { type: "button", class: "btn primary danger", onclick: async () => {
+        try { applyTools(await api("bin/remove", { method: "POST", body: { tool: o.id, program: !!prog } })); closeModal(); render(); toast("Removed. It is in the bin for 30 days."); }
+        catch (e) { toast(e.message); } } }, "Remove")));
+  showModal(dialog);
+}
+
+async function openBin() {
+  let items = [];
+  try { items = (await api("bin/list")).items; } catch (e) { toast(e.message); return; }
+  const dialog = h("section", { class: "dialog narrow", role: "dialog", "aria-modal": "true", "aria-labelledby": "bn-title" });
+  function draw() {
+    dialog.replaceChildren(
+      h("header", {}, h("div", { class: "titles" }, h("h1", { id: "bn-title" }, "Recently removed"),
+        h("p", {}, "Kept for 30 days, then gone for good.")),
+        h("button", { type: "button", class: "x", "aria-label": "Close", onclick: closeModal, html: ICON.close })),
+      h("div", { class: "body" }, items.length ? items.map((i) => h("div", { class: "datarow", style: "grid-template-columns:1fr auto auto" },
+        h("span", {}, h("strong", {}, i.name), i.kind === "program" ? h("span", { class: "muted" }, " · program") : null),
+        h("span", { class: "muted" }, `${i.days_left} days left`),
+        h("button", { type: "button", class: "btn small", onclick: async () => {
+          try { const r = await api("bin/restore", { method: "POST", body: { id: i.id } }); applyTools(r); items = items.filter((x) => x.id !== i.id); render(); toast(`${r.restored} is back.`); draw(); }
+          catch (e) { toast(e.message); } } }, "Put back")))
+        : h("p", { class: "help" }, "Nothing has been removed.")),
+      h("footer", {}, h("span", {}), h("div", { class: "right" }, h("button", { type: "button", class: "btn primary", onclick: closeModal }, "Close"))));
+  }
+  draw(); showModal(dialog);
 }
 
 function openMenu(anchor, items) {
