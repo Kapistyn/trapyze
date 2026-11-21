@@ -2,6 +2,13 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.17.7] - 2026-11-21
+
+- **Shared data takes up one line instead of a row of chips.** The main page shows
+  "Shared data · 14 files · newest today 09:12" (and how many tools need fresher
+  data). Click it for the full list: search, sort by newest, name or size, with
+  old files marked. Tools still show "Data needs updating" on their own tiles.
+
 ## [0.17.6] - 2026-11-20
 
 - **The .env import takes the keys it doesn't know too.** Variables that match no

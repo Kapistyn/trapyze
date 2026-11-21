@@ -224,10 +224,15 @@ function toolsView() {
           run: () => layoutCall("topics", { on: (S.layout || {}).topics === false }) } : null,
       ]) , html: ICON.dots }))));
 
-  if (S.data.length) {
-    wrap.append(h("section", { class: "chips", "aria-label": "Shared data" }, h("span", { class: "label" }, "Shared data"),
-      S.data.map((d) => h("span", { class: "chip" + (daysOld(d.modified) > 3 ? " old" : ""), title: d.name },
-        d.name, " · ", daysOld(d.modified) > 3 ? `${Math.floor(daysOld(d.modified))} days old` : "updated " + ago(d.modified)))));
+  if (S.data.length && !q) {
+    // One quiet line. The tools themselves say when their data is old ("Data needs updating"), so no list here.
+    const newest = Math.max(...S.data.map((d) => d.modified));
+    const stale = S.tools.filter((t) => (t.checks || []).some((c) => c.code === "old" || c.code === "missing")).length;
+    wrap.append(h("div", { class: "datastrip" },
+      h("button", { type: "button", class: "link quiet", "aria-haspopup": "dialog", onclick: openSharedData },
+        h("span", { html: ICON.chevron }), `Shared data · ${S.data.length} file${S.data.length === 1 ? "" : "s"}`),
+      h("span", { class: "muted" }, ` · newest ${ago(newest)}`),
+      stale ? h("span", { class: "muted warn-text" }, ` · ${stale} tool${stale === 1 ? "" : "s"} need${stale === 1 ? "s" : ""} fresher data`) : null));
   }
 
   for (const r of (!q && S.renewals) || []) wrap.append(h("div", { class: "notice warn updates-note", role: "status" },
@@ -251,6 +256,35 @@ function toolsView() {
   else if (view === "list") wrap.append(listView(q));
   else desktopView(wrap, q);
   return wrap;
+}
+
+function openSharedData() {
+  let find = "", by = "new";
+  const dialog = h("section", { class: "dialog", role: "dialog", "aria-modal": "true", "aria-labelledby": "sd-title" });
+  const list = h("div", { class: "datalist" });
+  function fill() {
+    const q = find.trim().toLowerCase();
+    const rows = S.data.filter((d) => !q || d.name.toLowerCase().includes(q))
+      .sort((a, b) => by === "name" ? a.name.localeCompare(b.name) : by === "size" ? b.bytes - a.bytes : b.modified - a.modified);
+    list.replaceChildren(...(rows.length ? rows.map((d) => h("div", { class: "datarow" + (daysOld(d.modified) > 3 ? " old" : ""), title: d.name },
+      h("span", { class: "n" }, d.name), h("span", { class: "muted" }, kb(d.bytes)),
+      h("span", { class: "muted" }, daysOld(d.modified) > 3 ? `${Math.floor(daysOld(d.modified))} days old` : "updated " + ago(d.modified))))
+      : [h("p", { class: "help" }, "No file matches.")]));
+  }
+  fill();
+  dialog.replaceChildren(
+    h("header", {}, h("div", { class: "titles" }, h("h1", { id: "sd-title" }, "Shared data"),
+      h("p", {}, `${S.data.length} files that your tools share, in the data folder.`)),
+      h("button", { type: "button", class: "x", "aria-label": "Close", onclick: closeModal, html: ICON.close })),
+    h("div", { class: "body" },
+      h("div", { class: "pathrow" },
+        h("input", { class: "input", type: "search", placeholder: "Search files", "aria-label": "Search files", oninput: (e) => { find = e.target.value; fill(); } }),
+        h("select", { class: "input", "aria-label": "Order", style: "max-width:150px", onchange: (e) => { by = e.target.value; fill(); } },
+          h("option", { value: "new" }, "Newest first"), h("option", { value: "name" }, "By name"), h("option", { value: "size" }, "Largest first"))),
+      list),
+    h("footer", {}, h("button", { type: "button", class: "link quiet", onclick: () => openPath(S.home + "/data") }, "Open the data folder"),
+      h("div", { class: "right" }, h("button", { type: "button", class: "btn primary", onclick: closeModal }, "Close"))));
+  showModal(dialog);
 }
 
 function cardsView(wrap, tools, q) {

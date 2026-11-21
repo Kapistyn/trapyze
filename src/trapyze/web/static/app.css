@@ -596,3 +596,11 @@ h3.sub { font-size: 14px; margin: 18px 0 4px; letter-spacing: .01em; }
 .pack-tools li > div { display: flex; flex-direction: column; font-size: 14px; }
 .pack-tools li span { color: var(--sub); font-size: 13px; }
 .pack-tools .square svg { width: 18px; height: 18px; }
+
+.datastrip { display: flex; flex-wrap: wrap; align-items: center; font-size: 13px; margin: -4px 0 0; }
+.datastrip .link { display: inline-flex; align-items: center; gap: 4px; }
+.datastrip .warn-text { color: var(--warn-ink, #9a5b00); }
+.datalist { display: flex; flex-direction: column; max-height: 52vh; overflow: auto; margin-top: 10px; }
+.datarow { display: grid; grid-template-columns: 1fr auto auto; gap: 14px; align-items: center; padding: 8px 4px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.datarow .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); }
+.datarow.old .muted:last-child { color: var(--warn-ink, #9a5b00); }

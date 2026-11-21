@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "trapyze"
-version = "0.17.6"
+version = "0.17.7"
 description = "Run your Python tools without the technical bits."
 readme = "README.md"
 requires-python = ">=3.11"
