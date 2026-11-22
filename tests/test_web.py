@@ -159,6 +159,17 @@ class WebTests(unittest.TestCase):
         self.assertIn("fair_test", [t["id"].split(".")[-1] for t in state["tools"]])
         self.assertEqual(self.request("POST", "/api/scripts/make-tool", {"rel": "../outside.py"})[0], 400)
 
+    def test_library_overview_over_the_api(self):
+        f = self.home.scripts / "uses_pandas.py"
+        f.write_text('# /// script\n# dependencies = ["pandas>=2"]\n# [tool.trapyze]\n# name = "Uses pandas"\n# ///\nprint(1)\n')
+        status, lib = self.request("GET", "/api/library/state")
+        self.assertEqual(status, 200)
+        self.assertEqual([p["name"] for p in lib["packages"]], ["pandas"])
+        self.assertIn("pandas", lib["common"])
+        status, lib = self.request("POST", "/api/library/common", {"text": "polars, duckdb"})
+        self.assertEqual(lib["common"], ["polars", "duckdb"])
+        self.assertEqual(self.request("POST", "/api/library/common", {"text": "x;y"})[0], 400)
+
     def test_remove_tool_goes_to_bin_and_comes_back(self):
         f = self.home.scripts / "gone_soon.py"
         f.write_text('# /// script\n# [tool.trapyze]\n# name = "Gone soon"\n# ///\nprint("hi")\n')

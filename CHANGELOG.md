@@ -2,6 +2,23 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.18.0] - 2026-11-22
+
+- **Package library.** Under the top ⋯ menu, "Package library…" shows every
+  package of every tool in one list: which versions are in use and by how many
+  tools, which tool asks for what, and where a newer version exists. Several
+  versions of one package live side by side; each tool keeps its own. A tool that
+  asks for an exact version or an upper limit (`==1.5.3`, `<2`) keeps it.
+- **Update everything that passes its test.** One button runs the tested update
+  for every tool with pinned versions, one after the other. A tool that is
+  running is left alone, one whose test fails keeps its old versions, and the
+  result per tool is shown. "Look for newer versions" checks without changing.
+- **Common packages.** A list of the packages almost every tool uses (pandas,
+  numpy, requests, yfinance, scipy, matplotlib, pyarrow, lxml, openpyxl,
+  scikit-learn, editable), downloaded once into the library with one button, so
+  a tool's first run doesn't wait for them. The files are stored once, however
+  many tools use them.
+
 ## [0.17.10] - 2026-11-22
 
 - **Packages used through a helper file now count.** A script that imports a

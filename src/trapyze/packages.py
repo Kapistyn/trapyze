@@ -307,3 +307,107 @@ class Packages:
                 self.check(tool)
             except PackageProblem:
                 pass
+
+
+# The library: every package of every tool in one view ------------------------------
+DEFAULT_COMMON = ["pandas", "numpy", "requests", "yfinance", "scipy", "matplotlib", "pyarrow", "lxml", "openpyxl", "scikit-learn"]
+_FIXED = re.compile(r"==|<(?!=)|<=|~=")
+
+
+def holds_version(requirement: str) -> bool:
+    """A tool that asks for an exact version (or an upper limit) keeps it: an update never goes past it."""
+    return bool(_FIXED.search(requirement))
+
+
+def _library_path(home: Home) -> Path:
+    return home.internal / "library.json"
+
+
+def common_list(home: Home) -> list[str]:
+    try:
+        data = json.loads(_library_path(home).read_text(encoding="utf-8"))
+        names = [package_name(x) for x in data.get("common", []) if package_name(str(x))]
+        if names:
+            return names
+    except (OSError, ValueError):
+        pass
+    return list(DEFAULT_COMMON)
+
+
+def save_common(home: Home, names: list[str]) -> list[str]:
+    clean: list[str] = []
+    for n in names:
+        n = n.strip()
+        if n and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._\-\[\],=<>!~ ]*", n):
+            raise PackageProblem(f"“{n}” isn't a package name.")
+        if n and package_name(n) not in [package_name(c) for c in clean]:
+            clean.append(n)
+    _library_path(home).parent.mkdir(parents=True, exist_ok=True)
+    _library_path(home).write_text(json.dumps({"common": clean}, indent=1), encoding="utf-8")
+    return clean
+
+
+def library(self: "Packages", tools: list[Tool]) -> dict[str, Any]:
+    """Every direct package of every tool: which versions are in use, by which tools, what could be newer."""
+    saved = self._state()
+    rows: dict[str, dict[str, Any]] = {}
+    for tool in tools:
+        if not tool.dependencies:
+            continue
+        pinned = read_lock(lock_path(tool))
+        updates = {u["name"]: u["new"] for u in saved.get(tool.id, {}).get("updates", [])} if pinned else {}
+        for spec in tool.dependencies:
+            name = package_name(spec)
+            if not name:
+                continue
+            row = rows.setdefault(name, {"name": name, "tools": []})
+            row["tools"].append({"id": tool.id, "name": tool.name, "spec": spec.strip(), "version": pinned.get(name),
+                                 "update": updates.get(name), "fixed": holds_version(spec)})
+    out = []
+    for row in rows.values():
+        versions: dict[str, int] = {}
+        for t in row["tools"]:
+            key = t["version"] or "not pinned"
+            versions[key] = versions.get(key, 0) + 1
+        row["versions"] = [{"version": v, "tools": n} for v, n in sorted(versions.items())]
+        row["updates"] = sum(1 for t in row["tools"] if t["update"] and not t["fixed"])
+        out.append(row)
+    out.sort(key=lambda r: (-len(r["tools"]), r["name"]))
+    pinned_tools = sum(1 for t in tools if lock_path(t).exists())
+    return {"packages": out, "tools": sum(1 for t in tools if t.dependencies), "pinned_tools": pinned_tools,
+            "common": common_list(self.home), "uv": bool(self._engine or find_engine())}
+
+
+def update_all(self: "Packages", tools: list[Tool], busy: set[str], progress: Callable[[dict[str, Any]], None]) -> list[dict[str, Any]]:
+    """The tested update for every pinned tool, one by one. A tool that fails or is running keeps what it has."""
+    todo = [t for t in tools if lock_path(t).exists()]
+    results: list[dict[str, Any]] = []
+    for i, tool in enumerate(todo):
+        progress({"current": tool.name, "done": i, "total": len(todo)})
+        if tool.id in busy:
+            results.append({"tool": tool.name, "status": "skipped", "note": "it is running"})
+            continue
+        try:
+            changes = self.update(tool)
+            results.append({"tool": tool.name, "status": "updated" if changes else "same", "changes": changes})
+        except PackageProblem as exc:
+            results.append({"tool": tool.name, "status": "failed", "note": str(exc)})
+    progress({"current": "", "done": len(todo), "total": len(todo)})
+    return results
+
+
+def warm(self: "Packages", names: list[str]) -> str:
+    """Download the common packages into uv's cache, so the first run of a tool needs no waiting for them."""
+    names = [n for n in names if n.strip()]
+    if not names:
+        raise PackageProblem("The list is empty.")
+    with tempfile.TemporaryDirectory(prefix="trapyze-warm-") as tmp:
+        done = self._uv(["pip", "install", "--target", str(Path(tmp) / "t"), *names], Path(tmp))
+        if done.returncode != 0:
+            raise PackageProblem(self._explain(done))
+    return f"{len(names)} packages are in the library cache."
+
+
+Packages.library = library  # type: ignore[attr-defined]
+Packages.update_all = update_all  # type: ignore[attr-defined]
+Packages.warm = warm  # type: ignore[attr-defined]

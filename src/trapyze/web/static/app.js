@@ -217,6 +217,7 @@ function toolsView() {
         { label: "Have an AI write a tool…", run: () => openAIWrite() },
         { label: "Open the scripts folder", run: () => openPath(S.home + "/scripts") },
         { label: "Scripts and folders…", run: () => openScriptFiles("") },
+        { label: "Package library…", run: () => openLibrary() },
         { label: "Recently removed…", run: () => openBin() },
         S.tools.length > 1 ? { label: "New chain…", run: () => openChainEditor(null) } : null,
         { sep: true },
@@ -502,6 +503,66 @@ function tileMenu(it, anchor) {
       { sep: true }, { label: "Delete…", run: () => confirmChainDelete(o) });
   }
   openMenu(anchor, items);
+}
+
+async function openLibrary() {
+  let st = null, text = "", err = "", timer = null, open = new Set();
+  const dialog = h("section", { class: "dialog wide", role: "dialog", "aria-modal": "true", "aria-labelledby": "lb-title" });
+  const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
+  async function load() { try { st = await api("library/state"); if (!text) text = st.common.join(", "); err = ""; } catch (e) { err = e.message; } }
+  async function start(what) {
+    try { const r = await api("library/" + what, { method: "POST", body: {} }); st.job = r.job; poll(); draw(); }
+    catch (e) { err = e.message; draw(); }
+  }
+  function poll() {
+    stop();
+    timer = setInterval(async () => {
+      await load(); draw();
+      if (!st || !st.job || st.job.state !== "running") { stop(); applyTools(await api("tools")); render(); }
+    }, 1500);
+  }
+  const job = () => st && st.job && st.job.state ? st.job : null;
+  function jobBox() {
+    const j = job(); if (!j) return null;
+    if (j.state === "running") return h("div", { class: "notice" }, `${j.what === "warm" ? "Downloading the common packages" : j.what === "check" ? "Looking for newer versions" : "Updating"}${j.current ? ": " + j.current : "…"}${j.total ? ` (${j.done}/${j.total})` : ""}`);
+    if (j.state === "failed") return h("div", { class: "notice warn", role: "alert" }, j.note);
+    const bad = (j.results || []).filter((r) => r.status === "failed" || r.status === "skipped");
+    const changed = (j.results || []).filter((r) => r.status === "updated");
+    return h("div", { class: "notice" }, j.note || `Done. ${changed.length} tool${changed.length === 1 ? "" : "s"} updated, ${(j.results || []).filter((r) => r.status === "same").length} already current.`,
+      bad.length ? h("ul", { class: "help" }, bad.map((r) => h("li", {}, `${r.tool}: ${r.status === "skipped" ? "left alone, " + r.note : "kept its versions. " + r.note}`))) : null);
+  }
+  function draw() {
+    const running = job() && job().state === "running";
+    dialog.replaceChildren(
+      h("header", {}, h("div", { class: "titles" }, h("h1", { id: "lb-title" }, "Package library"),
+        h("p", {}, st ? `${st.packages.length} packages across ${st.tools} tools. Each tool keeps its own versions; the files are stored once.` : "Loading…")),
+        h("button", { type: "button", class: "x", "aria-label": "Close", onclick: () => { stop(); closeModal(); }, html: ICON.close })),
+      h("div", { class: "body", style: "max-height:62vh;overflow:auto" },
+        err ? h("div", { class: "notice warn", role: "alert" }, err) : null, jobBox(),
+        st ? [
+          h("div", { class: "row", style: "gap:10px;margin-bottom:10px" },
+            h("button", { type: "button", class: "btn", disabled: running || !st.uv, onclick: () => start("check") }, "Look for newer versions"),
+            h("button", { type: "button", class: "btn primary", disabled: running || !st.uv || !st.pinned_tools, onclick: () => start("update-all") }, "Update everything that passes its test"),
+            h("span", { class: "help" }, st.pinned_tools ? `${st.pinned_tools} tool${st.pinned_tools === 1 ? " has" : "s have"} pinned versions. Others always use the newest at their next run.` : "No tool has pinned versions yet. Pin them in a tool's Packages window.")),
+          h("div", { class: "datalist", style: "max-height:none" }, st.packages.map((p) => [
+            h("div", { class: "datarow", style: "grid-template-columns:1fr auto auto;cursor:pointer", onclick: () => { open.has(p.name) ? open.delete(p.name) : open.add(p.name); draw(); } },
+              h("span", { class: "n" }, p.name), h("span", { class: "muted" }, p.versions.map((v) => `${v.version} ×${v.tools}`).join(" · ")),
+              h("span", { class: p.updates ? "" : "muted", style: p.updates ? "color:var(--warn-ink,#9a5b00)" : "" }, p.updates ? `${p.updates} newer` : `${p.tools.length} tool${p.tools.length === 1 ? "" : "s"}`)),
+            open.has(p.name) ? p.tools.map((t) => h("div", { class: "datarow", style: "padding-left:22px;grid-template-columns:1fr auto auto" },
+              h("span", {}, t.name), h("span", { class: "muted" }, t.fixed ? `asks for ${t.spec.replace(p.name, "").trim()}: kept` : t.version || "not pinned"),
+              h("span", { class: "muted" }, t.update && !t.fixed ? "→ " + t.update : ""))) : null])),
+          h("div", { class: "field", style: "margin-top:16px" },
+            h("label", { for: "lb-common" }, "Common packages"),
+            h("span", { class: "help" }, "Downloaded once into the library, so a new tool's first run starts fast. Edit the list if you like."),
+            h("textarea", { id: "lb-common", class: "input", rows: 2, oninput: (e) => { text = e.target.value; } }, text),
+            h("div", { class: "row", style: "gap:10px;margin-top:8px" },
+              h("button", { type: "button", class: "btn", disabled: running, onclick: async () => {
+                try { st = await api("library/common", { method: "POST", body: { text } }); text = st.common.join(", "); err = ""; draw(); } catch (e) { err = e.message; draw(); } } }, "Save the list"),
+              h("button", { type: "button", class: "btn", disabled: running || !st.uv, onclick: () => start("warm") }, "Download them now")))] : null),
+      h("footer", {}, h("span", {}), h("div", { class: "right" }, h("button", { type: "button", class: "btn primary", onclick: () => { stop(); closeModal(); } }, "Close"))));
+  }
+  draw(); showModal(dialog);
+  await load(); if (job() && job().state === "running") poll(); draw();
 }
 
 async function openScriptFiles(focus) {

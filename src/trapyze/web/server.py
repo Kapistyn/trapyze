@@ -125,6 +125,7 @@ class App:
         self.presets = Presets(home.internal)
         self.chains = Chains(home.internal)
         self.bin = Bin(home)
+        self.library_job: dict[str, Any] = {}
         self.looks = Looks(home.internal)
         self.layout = Layout(home.internal)
         self._suggest_cache: dict[tuple[str, float], str] = {}
@@ -1041,6 +1042,38 @@ class App:
             self.bin.put(tool.path.relative_to(self.home.scripts).as_posix(), tool.name, "tool")
         return self.tools()
 
+    def library_start(self, what: str, names: list[str] | None = None) -> None:
+        from ..packages import PackageProblem, common_list
+        with self.lock:
+            if self.library_job.get("state") == "running":
+                raise PackageProblem("Something is already running in the library. Wait until it has finished.")
+            self.library_job = {"state": "running", "what": what, "current": "", "done": 0, "total": 0, "results": [], "note": ""}
+
+        def progress(p: dict[str, Any]) -> None:
+            self.library_job.update(p)
+
+        def work() -> None:
+            try:
+                tools = self.home.tools()[0]
+                if what == "update-all":
+                    with self.lock:
+                        busy = {lr.run.tool.id for lr in self.runs.values() if lr.run.running}
+                    self.library_job["results"] = self.packages.update_all(tools, busy, progress)
+                elif what == "check":
+                    todo = [t for t in tools if t.path.with_name(t.path.name + ".lock").exists()]
+                    for i, t in enumerate(todo):
+                        progress({"current": t.name, "done": i, "total": len(todo)})
+                        try:
+                            self.packages.check(t)
+                        except PackageProblem as exc:
+                            self.library_job["results"].append({"tool": t.name, "status": "failed", "note": str(exc)})
+                else:
+                    self.library_job["note"] = self.packages.warm(common_list(self.home))
+                self.library_job["state"] = "done"
+            except Exception as exc:  # shown in the window; the job never takes traPYze down
+                self.library_job.update(state="failed", note=str(exc))
+        threading.Thread(target=work, name="trapyze-library", daemon=True).start()
+
     def delete_connection(self, name: str) -> dict[str, Any]:
         with self.vault_lock:
             self.vault.delete_connection(name)
@@ -1429,6 +1462,19 @@ class Handler(BaseHTTPRequestHandler):
                                               "not compare with your real keys. Unlock it first to be sure.")
                 return self._json(HTTPStatus.OK, result)
             except (ShareProblem, LookupError, OSError) as exc:
+                return self._error(HTTPStatus.BAD_REQUEST, str(exc))
+        if parts and parts[0] == "library" and len(parts) == 2:
+            from ..packages import PackageProblem, save_common
+            try:
+                if method == "GET" and parts[1] == "state":
+                    return self._json(HTTPStatus.OK, {**app.packages.library(app.home.tools()[0]), "job": app.library_job})
+                if method == "POST" and parts[1] == "common":
+                    save_common(app.home, re.split(r"[,\n]+", str(self._body().get("text", ""))))
+                    return self._json(HTTPStatus.OK, {**app.packages.library(app.home.tools()[0]), "job": app.library_job})
+                if method == "POST" and parts[1] in ("update-all", "warm", "check"):
+                    app.library_start(parts[1])
+                    return self._json(HTTPStatus.OK, {"job": app.library_job})
+            except (PackageProblem, ValueError) as exc:
                 return self._error(HTTPStatus.BAD_REQUEST, str(exc))
         if method == "POST" and parts[0] == "packages" and len(parts) == 2:
             from ..packages import PackageProblem
