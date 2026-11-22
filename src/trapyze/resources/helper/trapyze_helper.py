@@ -9,6 +9,8 @@
     r = tz.api("fmp", "quote", params={"symbol": "AAPL"})   # a web service from Connections
     print(r.json())
     df = tz.prices("SPY", start="2010-01-01")  # shared price cache: downloads only what's missing
+    key = tz.key_text("oracle")             # a "Key file" connection: its text, never written to disk
+    path = tz.key_file("oracle")            # or as a temporary file, deleted when the run ends
 
 Outside traPYze (run by hand in a terminal) everything still works: settings
 come from --key value arguments, progress prints a plain line, and files go
@@ -33,7 +35,7 @@ from pathlib import Path
 from typing import Any
 
 _MARK = "@@trapyze"
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 
 def inside_trapyze() -> bool:
@@ -65,6 +67,35 @@ def settings() -> dict[str, Any]:
                 values[key] = "true"
         i += 1
     return values
+
+
+def key_text(connection: str) -> str:
+    """The text of a "Key file" connection (for example an SSH key). Needs the connection in the tool's label."""
+    name = re.sub(r"[^A-Za-z0-9]+", "_", connection).strip("_").upper()
+    text = os.environ.get(f"{name}_KEY", "")
+    if not text:
+        raise RuntimeError(f"No key found for the connection '{connection}'. Add it under Connections (kind: Key file) "
+                           f"and list it in the tool's label: connections = [\"{connection}\"].")
+    return text
+
+
+_KEEP: list[str] = []
+
+
+def key_file(connection: str) -> Path:
+    """The key as a temporary file that only you can read, deleted when the run ends."""
+    import atexit
+    import tempfile
+    handle, name = tempfile.mkstemp(prefix="trapyze-key-")
+    with os.fdopen(handle, "w", encoding="utf-8", newline="\n") as f:
+        f.write(key_text(connection))
+    try:
+        os.chmod(name, 0o600)
+    except OSError:
+        pass
+    _KEEP.append(name)
+    atexit.register(lambda n=name: Path(n).unlink(missing_ok=True))
+    return Path(name)
 
 
 def progress(fraction: float, message: str = "") -> None:

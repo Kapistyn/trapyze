@@ -159,6 +159,26 @@ class WebTests(unittest.TestCase):
         self.assertIn("fair_test", [t["id"].split(".")[-1] for t in state["tools"]])
         self.assertEqual(self.request("POST", "/api/scripts/make-tool", {"rel": "../outside.py"})[0], 400)
 
+    def test_key_file_connection_reaches_the_tool_as_text(self):
+        key = "-----BEGIN OPENSSH PRIVATE KEY-----\r\nAAAAB3Nza\r\n-----END OPENSSH PRIVATE KEY-----"
+        (self.home.scripts / "needs_ssh.py").write_text(
+            '# /// script\n# [tool.trapyze]\n# connections = ["oracle"]\n# ///\n'
+            'import os\nt = os.environ["ORACLE_KEY"]\nprint("lines:", len(t.splitlines()), t.startswith("-----BEGIN"), "\\r" in t)\n')
+        self.request("POST", "/api/vault/create", {"pin": "917364"})
+        status, data = self.request("POST", "/api/connections/save", {"name": "oracle", "kind": "key_file",
+                                    "values": {"ORACLE_KEY": "ssh-ed25519 AAAA public half"}, "secret": ["ORACLE_KEY"], "scheduled": True})
+        self.assertEqual(status, 400)
+        self.assertIn("public half", data["error"])
+        status, data = self.request("POST", "/api/connections/save", {"name": "oracle", "kind": "key_file",
+                                    "values": {"ORACLE_KEY": "hello"}, "secret": ["ORACLE_KEY"], "scheduled": True})
+        self.assertEqual(status, 400)
+        status, state = self.request("POST", "/api/connections/save", {"name": "oracle", "kind": "key_file",
+                                     "values": {"ORACLE_KEY": key}, "secret": ["ORACLE_KEY"], "scheduled": True})
+        self.assertEqual(status, 200)
+        self.assertNotIn("AAAAB3Nza", json.dumps(state))
+        status, run = self.request("POST", "/api/runs", {"tool": "needs_ssh", "settings": {}, "allow": True})
+        self.assertEqual(status, 201, run)
+
     def test_library_overview_over_the_api(self):
         f = self.home.scripts / "uses_pandas.py"
         f.write_text('# /// script\n# dependencies = ["pandas>=2"]\n# [tool.trapyze]\n# name = "Uses pandas"\n# ///\nprint(1)\n')

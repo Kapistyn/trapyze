@@ -2248,9 +2248,9 @@ function openConnection(existing, suggestedName, imported) {
   }
   function rowsFor(kind) {
     return T[kind].variables.map((v) => ({ name: v.name || varName(st.name, v.suffix), suffix: v.suffix || null,
-      label: v.label, secret: v.secret, value: "", example: v.example || "", keep: false }));
+      label: v.label, secret: v.secret, value: "", example: v.example || "", keep: false, file: !!v.file }));
   }
-  if (existing) st.rows = existing.variables.map((x) => ({ name: x.name, label: x.name, secret: x.secret, value: x.secret ? "" : (x.value || ""), keep: x.secret, suffix: null }));
+  if (existing) st.rows = existing.variables.map((x) => ({ name: x.name, label: x.name, secret: x.secret, value: x.secret ? "" : (x.value || ""), keep: x.secret, suffix: null, file: existing.kind === "key_file" }));
   else if (imported) st.rows = imported.variables.map((x) => ({ name: x.name, label: x.name, secret: x.secret, value: "", keep: true, fromFile: true, suffix: null }));
   else st.rows = rowsFor(st.kind);
 
@@ -2338,6 +2338,19 @@ function openConnection(existing, suggestedName, imported) {
       const showBtn = r.secret ? h("button", { type: "button", class: "btn", onclick: () => { input.type = input.type === "password" ? "text" : "password"; showBtn.textContent = input.type === "password" ? "Show" : "Hide"; } }, "Show") : null;
       const nameEl = h("input", { class: "input", "data-varname": "1", value: r.name, spellcheck: "false", "aria-label": "Variable name",
         style: "font-family:var(--mono);font-size:13px;height:36px", oninput: (e) => { r.name = e.target.value; r.touched = true; } });
+      if (r.file) {
+        body.append(h("div", { class: "field" }, h("label", { for: id }, r.label),
+          h("div", { class: "pathrow" },
+            h("input", { id: id + "-f", type: "file", style: "display:none", onchange: async (e) => {
+              const f = e.target.files[0]; if (!f) return;
+              r.value = await f.text(); r.loaded = `${f.name} (${f.size > 1024 ? Math.round(f.size / 102.4) / 10 + " kB" : f.size + " bytes"})`; draw(); } }),
+            h("button", { type: "button", class: "btn", onclick: () => document.getElementById(id + "-f").click() }, r.keep && !r.value ? "Replace the key file…" : "Choose the key file…"),
+            h("span", { class: "help", style: "align-self:center" }, r.loaded ? `Loaded: ${r.loaded}. Nothing is shown.` : r.keep ? "A key is stored. Choose a file to replace it." : "Nothing chosen yet.")),
+          h("details", {}, h("summary", { class: "help" }, "Or paste the key text"),
+            h("textarea", { id, class: "input", rows: 5, spellcheck: "false", autocomplete: "off", style: "font-family:var(--mono);font-size:12px",
+              placeholder: "-----BEGIN OPENSSH PRIVATE KEY-----", oninput: (e) => { r.value = e.target.value; r.loaded = ""; } }, r.loaded ? "" : r.value))));
+        return;
+      }
       body.append(h("div", { class: "field" },
         st.kind === "custom" || imported ? null : h("label", { for: id }, r.label),
         st.showNames ? h("div", { class: "pathrow" }, nameEl,
@@ -2349,7 +2362,7 @@ function openConnection(existing, suggestedName, imported) {
     if (st.kind === "custom" && !imported) body.append(h("button", { type: "button", class: "link more", onclick: () => { st.rows.push({ name: "", label: "", secret: true, value: "" }); draw(); } }, "+ Add a variable"));
     if (st.kind !== "custom" && !imported) body.append(h("button", { type: "button", class: "link more", "aria-expanded": String(st.showNames),
       onclick: () => { st.showNames = !st.showNames; draw(); } }, h("span", { html: ICON.chevron }), st.showNames ? "Hide variable names" : "Variable names (what the script reads)"));
-    if (st.kind !== "email") { apiHolder.replaceChildren(apiBox()); body.append(apiHolder); }
+    if (st.kind !== "email" && st.kind !== "key_file") { apiHolder.replaceChildren(apiBox()); body.append(apiHolder); }
     body.append(h("div", { class: "toggle-row" },
       h("div", { class: "t" }, h("span", { id: "cn-sched-l" }, "Available to scheduled plans"),
         h("span", { class: "help" }, "Plans can use it while you're away. Turn off for anything sensitive, like a bank or broker login.")),

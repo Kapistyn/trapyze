@@ -2,6 +2,16 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.19.0] - 2026-11-22
+
+- **Key files in the vault.** A new kind of connection, "Key file (SSH key,
+  certificate)": choose the file (or paste its text) and traPYze keeps it
+  encrypted with your other keys, so the original can be deleted. A public key
+  or anything that isn't a key is refused with a plain message. Tools get the
+  text in a variable (`ORACLE_KEY` for a connection called `oracle`), and the
+  helper has `tz.key_text("oracle")` and `tz.key_file("oracle")`, the second
+  one a temporary file that is deleted when the run ends.
+
 ## [0.18.0] - 2026-11-22
 
 - **Package library.** Under the top ⋯ menu, "Package library…" shows every

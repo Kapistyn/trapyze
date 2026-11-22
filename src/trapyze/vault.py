@@ -96,6 +96,12 @@ TEMPLATES: dict[str, dict[str, Any]] = {
         ],
         "scheduled": False,
     },
+    "key_file": {
+        "label": "Key file (SSH key, certificate)",
+        "hint": "A key file for a server, such as an SSH key. traPYze keeps it encrypted; tools get its text, or a temporary file that is deleted when the run ends.",
+        "variables": [{"suffix": "KEY", "label": "Key file", "secret": True, "file": True}],
+        "scheduled": True,
+    },
     "custom": {
         "label": "Something else",
         "hint": "Any set of variables a script expects, for example from its .env file.",
@@ -170,6 +176,16 @@ def _write_json(path: Path, data: dict) -> None:
 
 def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
+
+
+def _clean_key(text: Any) -> str:
+    """A key file's text: line endings made plain, one final newline. Anything that isn't a key is refused."""
+    t = str(text).replace("\r\n", "\n").replace("\r", "\n").strip()
+    if t.startswith(("ssh-", "ecdsa-", "sk-ssh-")) or t.split("\n", 1)[0].startswith("-----BEGIN PUBLIC KEY"):
+        raise VaultError("That is the public half of a key. Choose the private file (the one without .pub).")
+    if not (t.startswith("-----BEGIN") or t.startswith("{") or t.startswith("PuTTY-User-Key-File")):
+        raise VaultError("That doesn't look like a key file. A private key starts with “-----BEGIN …”.")
+    return t + "\n"
 
 
 def default_variable(name: str, suffix: str) -> str:
@@ -392,6 +408,8 @@ class Vault:
         if replace_from is not None and replace_from != name and name in conns:
             raise VaultError(f"There's already a connection called '{name}'.")
         old = conns.get(replace_from) if replace_from else None
+        if kind == "key_file":
+            values = {k: (_clean_key(v) if v is not None else None) for k, v in values.items()}
         merged = {}
         for var, value in values.items():
             if value is None:
