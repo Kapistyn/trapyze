@@ -216,6 +216,7 @@ function toolsView() {
         { label: "New tool from a template…", run: () => openNewTool() },
         { label: "Have an AI write a tool…", run: () => openAIWrite() },
         { label: "Open the scripts folder", run: () => openPath(S.home + "/scripts") },
+        { label: "Scripts and folders…", run: () => openScriptFiles("") },
         { label: "Recently removed…", run: () => openBin() },
         S.tools.length > 1 ? { label: "New chain…", run: () => openChainEditor(null) } : null,
         { sep: true },
@@ -491,7 +492,7 @@ function tileMenu(it, anchor) {
       const prog = (S.programs || {})[o.group] || { name: o.group };
       const others = S.tools.filter((t) => t.group === o.group && t.id !== o.id);
       items.push({ sep: true }, { head: "Program: " + prog.name });
-      if (others.length) items.push({ label: `Its other scripts (${others.length})`, run: () => openProgramScripts(o.group) });
+      items.push({ label: "Scripts in this program…", run: () => openScriptFiles(o.group) });
       if (prog.readme) items.push({ label: "Read me", run: () => openPath(`${S.home}/scripts/${o.group}/${prog.readme}`) });
       items.push({ label: "Open the program folder", run: () => openPath(`${S.home}/scripts/${o.group}`) });
     }
@@ -501,6 +502,40 @@ function tileMenu(it, anchor) {
       { sep: true }, { label: "Delete…", run: () => confirmChainDelete(o) });
   }
   openMenu(anchor, items);
+}
+
+async function openScriptFiles(focus) {
+  let folders = [];
+  try { folders = (await api("scripts/files")).folders; } catch (e) { toast(e.message); return; }
+  const dialog = h("section", { class: "dialog", role: "dialog", "aria-modal": "true", "aria-labelledby": "sf-title" });
+  const words = { tile: "Has a tile", hidden: "Tool, tile hidden", helper: "Helper, no tile", broken: "Can't be read" };
+  function draw() {
+    const shown = folders.filter((f) => f.files.length || f.program).sort((a, b) => (b.folder === focus) - (a.folder === focus));
+    dialog.replaceChildren(
+      h("header", {}, h("div", { class: "titles" }, h("h1", { id: "sf-title" }, "Scripts"),
+        h("p", {}, "Everything in the scripts folder. A helper is a file that a program uses; give it a tile to run it by itself.")),
+        h("button", { type: "button", class: "x", "aria-label": "Close", onclick: closeModal, html: ICON.close })),
+      h("div", { class: "body", style: "max-height:60vh;overflow:auto" }, shown.map((f) => h("div", { class: "field" },
+        h("div", { class: "row", style: "justify-content:space-between;gap:12px" },
+          h("strong", {}, f.name + (f.program ? "" : "")),
+          h("button", { type: "button", class: "link quiet", onclick: () => openPath(`${S.home}/scripts${f.folder ? "/" + f.folder : ""}`) }, "Open folder")),
+        f.files.length ? f.files.map((x) => h("div", { class: "datarow", style: "grid-template-columns:1fr auto auto", title: x.problem || x.rel },
+          h("span", { class: "n" }, x.file),
+          h("span", { class: "muted" }, words[x.status]),
+          h("span", { class: "row", style: "gap:8px" },
+            x.status === "helper" ? h("button", { type: "button", class: "btn small soft", onclick: async () => {
+              try { const r = await api("scripts/make-tool", { method: "POST", body: { rel: x.rel } }); applyTools(r); render();
+                folders = (await api("scripts/files")).folders; toast(`${r.name} has a tile now.`); draw(); }
+              catch (e) { toast(e.message); } } }, "Give it a tile") : null,
+            x.status === "hidden" ? h("button", { type: "button", class: "btn small soft", onclick: async () => {
+              try { applyTools(await api("programs/visibility", { method: "POST", body: { tool: x.tool, hidden: false } })); render();
+                folders = (await api("scripts/files")).folders; draw(); } catch (e) { toast(e.message); } } }, "Give it a tile") : null,
+            h("button", { type: "button", class: "btn small", onclick: () => openPath(`${S.home}/scripts/${x.rel}`) }, "Open"))))
+          : h("p", { class: "help" }, "No scripts here yet.")))),
+      h("footer", {}, h("button", { type: "button", class: "link quiet", onclick: () => openPath(S.home + "/scripts") }, "Open the scripts folder"),
+        h("div", { class: "right" }, h("button", { type: "button", class: "btn primary", onclick: closeModal }, "Close"))));
+  }
+  draw(); showModal(dialog);
 }
 
 function confirmRemove(o) {

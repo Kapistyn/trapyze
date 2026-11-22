@@ -140,6 +140,23 @@ class WebTests(unittest.TestCase):
         self.assertEqual(second[0], 409)
         self.assertIn("still writing", second[1]["error"])
 
+    def test_scripts_browser_and_helper_gets_a_tile(self):
+        prog = self.home.scripts / "rot"
+        prog.mkdir()
+        (prog / "rot.py").write_text('# /// script\n# [tool.trapyze]\n# name = "Rot"\n# ///\nimport helper_mod\nprint(1)\n')
+        (prog / "fair_test.py").write_text('"""Fair test of the rotation."""\nimport argparse\nimport rot\n'
+                                           'ap = argparse.ArgumentParser()\nap.add_argument("--csv", default="p.csv")\nif __name__ == "__main__":\n    ap.parse_args()\n')
+        files = {f["file"]: f for fo in self.request("GET", "/api/scripts/files")[1]["folders"] if fo["folder"] == "rot" for f in fo["files"]}
+        self.assertEqual(files["rot.py"]["status"], "tile")
+        self.assertEqual(files["fair_test.py"]["status"], "helper")
+        status, state = self.request("POST", "/api/scripts/make-tool", {"rel": "rot/fair_test.py"})
+        self.assertEqual((status, state["name"]), (200, "Fair test"))
+        text = (prog / "fair_test.py").read_text()
+        self.assertIn("[tool.trapyze]", text)
+        self.assertNotIn('"rot"', text)  # a sibling file is not a package
+        self.assertIn("fair_test", [t["id"].split(".")[-1] for t in state["tools"]])
+        self.assertEqual(self.request("POST", "/api/scripts/make-tool", {"rel": "../outside.py"})[0], 400)
+
     def test_remove_tool_goes_to_bin_and_comes_back(self):
         f = self.home.scripts / "gone_soon.py"
         f.write_text('# /// script\n# [tool.trapyze]\n# name = "Gone soon"\n# ///\nprint("hi")\n')

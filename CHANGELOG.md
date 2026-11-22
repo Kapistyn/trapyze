@@ -2,6 +2,16 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.17.9] - 2026-11-22
+
+- **Scripts and folders.** Under the top ⋯ menu, "Scripts and folders…" lists
+  everything in the scripts folder: single scripts and each program with its
+  files, and what each one is (has a tile, tile hidden, or a helper without a
+  tile). Each row has Open (the file) and each program has Open folder. A helper
+  that can run on its own gets **Give it a tile**: traPYze adds the label for you
+  (name, options and packages read from the script). A program's tile menu has
+  "Scripts in this program…", which opens the same list at that program.
+
 ## [0.17.8] - 2026-11-21
 
 - **Remove, from a tile's menu.** A tool's ⋯ menu now ends with "Remove…" (for a

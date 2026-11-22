@@ -33,6 +33,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 from .. import __version__
 from ..apis import PRESETS, helper, run_config
 from ..bin import Bin, BinError
+from ..scriptfiles import ScriptFileError, listing as script_listing, make_tool as give_tile
 from ..envmatch import match as match_env
 from ..freshness import checks, disk_free
 from ..schedule import NeedsPassword, Plans, System, check_when, describe, nice_time, next_times, sync as sync_plan
@@ -1576,6 +1577,15 @@ class Handler(BaseHTTPRequestHandler):
                 app.layout_call(parts[1], self._body())
                 return self._json(HTTPStatus.OK, app.tools())
             except (StoreError, ValueError, TypeError) as exc:
+                return self._error(HTTPStatus.BAD_REQUEST, str(exc))
+        if parts and parts[0] == "scripts" and len(parts) == 2:
+            try:
+                if method == "GET" and parts[1] == "files":
+                    return self._json(HTTPStatus.OK, {"folders": script_listing(app.home)})
+                if method == "POST" and parts[1] == "make-tool":
+                    name = give_tile(app.home, str(self._body().get("rel", "")))
+                    return self._json(HTTPStatus.OK, {"name": name, **app.tools()})
+            except (ScriptFileError, LabelError, OSError) as exc:
                 return self._error(HTTPStatus.BAD_REQUEST, str(exc))
         if parts and parts[0] == "bin" and len(parts) == 2:
             try:

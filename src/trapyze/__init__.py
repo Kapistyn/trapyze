@@ -1,6 +1,6 @@
 """traPYze: run your Python tools without the technical bits."""
 
-__version__ = "0.17.8"
+__version__ = "0.17.9"
 
 from .home import Home  # noqa: E402
 from .label import LabelError, Setting, SettingError, Tool, read_tool  # noqa: E402
