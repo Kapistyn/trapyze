@@ -2,6 +2,17 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.22.0] - 2026-11-22
+
+- **Ask me first, in a chain.** Each step of a chain has a box "Ask me first". The chain
+  stops there, you get a notification, and the chain window shows "Run <tool>" or "Skip this
+  step". If nobody answers within an hour, the chain stops at that step.
+- **Back up scripts.** More, "Back up scripts…" keeps every tool and program in a Git
+  history, and can send a copy to your own (private) repository. Only code and notes go in:
+  never keys, data or results, and a script that contains a private key is held back. Back up
+  now, or once a day when no tool is running. Needs Git installed; traPYze never sees the
+  password for the repository.
+
 ## [0.21.0] - 2026-11-22
 
 - **Plans can try again after a failure.** In a plan: "If it fails: Tell me / Try once more /

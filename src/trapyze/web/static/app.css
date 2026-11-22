@@ -226,9 +226,9 @@ button { cursor: pointer; }
 .steps-list.live li.running { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
 .steps-list.live li.skipped, .steps-list.live li.waiting { opacity: .7; }
 .steps-edit { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.step-edit { display: grid; grid-template-columns: 28px minmax(0, 1.2fr) minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.step-edit { display: grid; grid-template-columns: 28px minmax(0, 1.2fr) minmax(0, 1fr) auto auto; gap: 8px; align-items: center; }
 .step-edit .num { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-ink); font-weight: 700; font-size: 13px; }
-@media (max-width: 640px) { .step-edit { grid-template-columns: 28px 1fr; } .step-edit > :nth-child(3), .step-edit > :nth-child(4) { grid-column: 2; } }
+@media (max-width: 640px) { .step-edit { grid-template-columns: 28px 1fr; } .step-edit > :nth-child(3), .step-edit > :nth-child(4), .step-edit > :nth-child(5) { grid-column: 2; } }
 .lookpick { display: flex; flex-direction: column; gap: 12px; }
 .swatches { display: flex; flex-wrap: wrap; gap: 10px; }
 .swatch { width: 36px; height: 36px; border-radius: 999px; border: 2px solid transparent; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .08); }

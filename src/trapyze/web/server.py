@@ -33,6 +33,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 from .. import __version__
 from ..apis import PRESETS, helper, run_config
 from ..bin import Bin, BinError
+from .. import backup as scripts_backup
 from .. import storage as store_room
 from ..scriptfiles import ScriptFileError, listing as script_listing, make_tool as give_tile, update_apply as script_update_apply, update_plan as script_update_plan
 from ..envmatch import match as match_env
@@ -701,6 +702,16 @@ class App:
         timer.start()
         return True
 
+    def _quiet_backup(self) -> None:
+        try:
+            scripts_backup.run(self.home)
+        except Exception:
+            pass
+
+    def _chain_asks(self, chain: ChainRun, step: dict[str, Any]) -> None:
+        if self.desktop:
+            self.desktop.notify("Waiting for your OK", f"“{chain.chain.name}” is ready to run {step['name']}. Open traPYze to continue.")
+
     def _chain_finished(self, chain: ChainRun) -> None:
         plan = getattr(chain, "plan", None)
         if plan:
@@ -754,7 +765,8 @@ class App:
         names = {t.id: t.name for t in tools.values()}
         run = ChainRun(chain, settings, names,
                        lambda tool_id, chosen: self.start(tool_id, chosen, in_chain=True, unattended=unattended).run,
-                       on_done=self._chain_finished, retries=retries, retry_wait=retry_wait * 60)
+                       on_done=self._chain_finished, retries=retries, retry_wait=retry_wait * 60,
+                       on_ask=self._chain_asks)
         with self.lock:
             self.chain_runs[run.id] = run
             done = [k for k, v in self.chain_runs.items() if v.status != "running"]
@@ -842,6 +854,8 @@ class App:
                     threading.Thread(target=self._quiet_update_check, name="trapyze-update-check", daemon=True).start()
                 if store_room.due(self.home) and not any(lr.run.running for lr in list(self.runs.values())):
                     threading.Thread(target=lambda: store_room.tidy(self.home, self.bin), name="trapyze-tidy", daemon=True).start()
+                if scripts_backup.due(self.home) and not any(lr.run.running for lr in list(self.runs.values())):
+                    threading.Thread(target=self._quiet_backup, name="trapyze-backup", daemon=True).start()
                 self._remind_renewals()
                 for plan in self.plans.all():
                     if plan.get("enabled", True):
@@ -1538,6 +1552,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(HTTPStatus.OK, result)
             except (ShareProblem, LookupError, OSError) as exc:
                 return self._error(HTTPStatus.BAD_REQUEST, str(exc))
+        if parts and parts[0] == "backup" and len(parts) == 2:
+            try:
+                if method == "GET" and parts[1] == "state":
+                    return self._json(HTTPStatus.OK, scripts_backup.state(app.home))
+                if method == "POST" and parts[1] == "settings":
+                    return self._json(HTTPStatus.OK, scripts_backup.change(app.home, self._body()))
+                if method == "POST" and parts[1] == "run":
+                    return self._json(HTTPStatus.OK, scripts_backup.run(app.home))
+            except scripts_backup.BackupProblem as exc:
+                return self._error(HTTPStatus.BAD_REQUEST, str(exc))
         if parts and parts[0] == "storage" and len(parts) == 2:
             try:
                 body = self._body() if method == "POST" else {}
@@ -1838,6 +1862,12 @@ class Handler(BaseHTTPRequestHandler):
             if method == "POST" and parts[3:] == ["stop"]:
                 chain_run.stop()
                 return self._json(HTTPStatus.OK, {"stopping": True})
+            if method == "POST" and parts[3:] == ["answer"]:
+                try:
+                    chain_run.answer(str(self._body().get("decision", "")))
+                except StoreError as exc:
+                    return self._error(HTTPStatus.BAD_REQUEST, str(exc))
+                return self._json(HTTPStatus.OK, chain_run.summary())
 
         if route == ("GET", "history"):
             tool = (query.get("tool") or [None])[0]

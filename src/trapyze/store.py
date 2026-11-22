@@ -99,6 +99,7 @@ class Presets:
 class Step:
     tool: str
     use: str = "last"  # "standard", "last" (what was used last time) or "preset:<name>"
+    ask: bool = False  # wait for the person's OK before this step runs
 
     def describe(self) -> str:
         if self.use == "standard":
@@ -123,7 +124,7 @@ class Chain:
     def to_json(self) -> dict[str, Any]:
         return {"id": self.id, "name": self.name, "description": self.description, "icon": self.icon,
                 "color": self.color, "on_problem": self.on_problem,
-                "steps": [{"tool": s.tool, "use": s.use} for s in self.steps]}
+                "steps": [{"tool": s.tool, "use": s.use, "ask": s.ask} for s in self.steps]}
 
 
 class Chains:
@@ -134,7 +135,7 @@ class Chains:
         out = []
         for c in _read(self.path, {"chains": []}).get("chains", []):
             try:
-                out.append(Chain(c["id"], c["name"], [Step(s["tool"], s.get("use", "last")) for s in c["steps"]],
+                out.append(Chain(c["id"], c["name"], [Step(s["tool"], s.get("use", "last"), bool(s.get("ask", False))) for s in c["steps"]],
                                  c.get("on_problem", "stop"), c.get("description", ""), c.get("icon", "link"),
                                  c.get("color", "purple")))
             except (KeyError, TypeError):
@@ -162,7 +163,7 @@ class Chains:
                     raise StoreError(f"Step {i}: {known[tool_id].name} has no preset “{use.removeprefix('preset:')}”.")
             elif use not in ("standard", "last"):
                 raise StoreError(f"Step {i}: choose which settings to use.")
-            steps.append(Step(tool_id, use))
+            steps.append(Step(tool_id, use, bool(raw.get("ask"))))
         if not steps:
             raise StoreError("A chain needs at least one step.")
         if len(steps) > 30:
@@ -209,8 +210,13 @@ class ChainRun:
 
     def __init__(self, chain: Chain, settings: list[dict[str, Any]], names: dict[str, str],
                  start: Callable[[str, dict[str, Any]], Any], busy_wait: float = 1800,
-                 on_done: Callable[["ChainRun"], Any] | None = None, retries: int = 0, retry_wait: float = 600):
+                 on_done: Callable[["ChainRun"], Any] | None = None, retries: int = 0, retry_wait: float = 600,
+                 on_ask: Callable[["ChainRun", dict[str, Any]], Any] | None = None, ask_wait: float = 3600):
         self.id = uuid.uuid4().hex[:12]
+        self.on_ask = on_ask
+        self.ask_wait = ask_wait
+        self._answer: str | None = None
+        self._answered = threading.Event()
         self.retries = max(0, retries)
         self.retry_wait = retry_wait
         self.chain = chain
@@ -222,7 +228,7 @@ class ChainRun:
         self.ended: float | None = None
         self.status = "running"  # running, done, warning, failed, stopped
         self.steps = [{"tool": s.tool, "name": names.get(s.tool, s.tool), "use": s.describe(), "status": "waiting",
-                       "run_id": None, "message": ""} for s in chain.steps]
+                       "run_id": None, "message": "", "ask": s.ask} for s in chain.steps]
         self.current = 0
         self._stop = threading.Event()
         self._run = None
@@ -237,6 +243,32 @@ class ChainRun:
         run = self._run
         if run is not None:
             run.cancel()
+
+    def answer(self, decision: str) -> None:
+        """The person's reply to a step that asked: "go", "skip" or "stop"."""
+        if decision not in ("go", "skip", "stop"):
+            raise StoreError("Choose: run it, skip it or stop the chain.")
+        self._answer = decision
+        self._answered.set()
+
+    def _ask(self, step: dict[str, Any]) -> str:
+        step["status"], step["message"] = "asking", "Waiting for your OK."
+        self._answer = None
+        self._answered.clear()
+        if self.on_ask:
+            try:
+                self.on_ask(self, step)
+            except Exception:
+                pass
+        waited = 0.0
+        while not self._answered.wait(1):
+            waited += 1
+            if self._stop.is_set():
+                return "stop"
+            if waited >= self.ask_wait:
+                step["message"] = "No answer in time, so the chain stopped here."
+                return "timeout"
+        return self._answer or "stop"
 
     def wait(self, timeout: float | None = None) -> str:
         self._thread.join(timeout)
@@ -260,6 +292,17 @@ class ChainRun:
                 step["status"] = "skipped"
                 step["message"] = "Skipped because an earlier step had a problem."
                 continue
+            if step.get("ask"):
+                reply = self._ask(step)
+                if reply == "skip":
+                    step["status"], step["message"] = "skipped", "You chose to skip this step."
+                    continue
+                if reply in ("stop", "timeout"):
+                    step["status"] = "skipped"
+                    if reply == "stop":
+                        step["message"] = "You stopped the chain here."
+                    self._stop.set()
+                    continue
             step["status"] = "running"
             waited = 0.0
             while True:

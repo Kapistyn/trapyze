@@ -243,6 +243,18 @@ class WebTests(unittest.TestCase):
         self.request("POST", "/api/storage/settings", {"pin": "some_run", "pinned": True})
         self.assertEqual(self.request("GET", "/api/tools")[1]["pins"], ["some_run"])
 
+    def test_backup_and_chain_answer_endpoints(self):
+        status, st = self.request("GET", "/api/backup/state")
+        self.assertEqual(status, 200)
+        self.assertFalse(st["auto"])
+        self.assertEqual(self.request("POST", "/api/backup/settings", {"remote": "--bad"})[0], 400)
+        status, st = self.request("POST", "/api/backup/settings", {"auto": True, "remote": "https://github.com/me/s.git"})
+        self.assertEqual((status, st["auto"], st["remote"]), (200, True, "https://github.com/me/s.git"))
+        self.request("POST", "/api/backup/settings", {"remote": ""})
+        status, done = self.request("POST", "/api/backup/run", {})
+        self.assertEqual((status, done["ok"]), (200, True))
+        self.assertEqual(self.request("POST", "/api/chains/runs/nope/answer", {"decision": "go"})[0], 404)
+
     def test_library_overview_over_the_api(self):
         f = self.home.scripts / "uses_pandas.py"
         f.write_text('# /// script\n# dependencies = ["pandas>=2"]\n# [tool.trapyze]\n# name = "Uses pandas"\n# ///\nprint(1)\n')

@@ -219,6 +219,7 @@ function toolsView() {
         { label: "Scripts and folders…", run: () => openScriptFiles("") },
         { label: "Package library…", run: () => openLibrary() },
         { label: "Storage…", run: () => openStorage() },
+        { label: "Back up scripts…", run: () => openBackup() },
         { label: "Recently removed…", run: () => openBin() },
         S.tools.length > 1 ? { label: "New chain…", run: () => openChainEditor(null) } : null,
         { sep: true },
@@ -2638,6 +2639,8 @@ function openChainEditor(existing) {
           h("option", { value: "last", selected: step.use === "last" }, "Settings used last time"),
           h("option", { value: "standard", selected: step.use === "standard" }, "Standard settings"),
           presets.map((n) => h("option", { value: "preset:" + n, selected: step.use === "preset:" + n }, "Preset: " + n))]),
+      h("label", { class: "row", style: "gap:4px;flex-wrap:nowrap;white-space:nowrap", title: "The chain waits for your OK before this step" },
+        h("input", { type: "checkbox", checked: !!step.ask, "aria-label": `Step ${i + 1}: ask me first`, onchange: (e) => { step.ask = e.target.checked; } }), "Ask me first"),
       h("div", { class: "row", style: "gap:4px;flex-wrap:nowrap" },
         h("button", { type: "button", class: "btn small icon-only", "aria-label": "Move up", disabled: i === 0, onclick: () => move(-1) }, "↑"),
         h("button", { type: "button", class: "btn small icon-only", "aria-label": "Move down", disabled: i === st.steps.length - 1, onclick: () => move(1) }, "↓"),
@@ -2701,7 +2704,9 @@ function openChainRun(id) {
   const dialog = h("section", { class: "dialog", role: "dialog", "aria-modal": "true", "aria-labelledby": "cr-title" });
   function update(cr) {
     const running = cr.status === "running";
-    const done = cr.steps.filter((x) => !["waiting", "running"].includes(x.status)).length;
+    const done = cr.steps.filter((x) => !["waiting", "running", "asking"].includes(x.status)).length;
+    const asking = cr.steps.find((x) => x.status === "asking");
+    const reply = (decision) => async () => { try { await api(`chains/runs/${id}/answer`, { method: "POST", body: { decision } }); } catch (e) { toast(e.message); } };
     const heads = { running: ["run", `Step ${cr.current + 1} of ${cr.steps.length}`], done: ["ok", "Bingo! All done"],
       warning: ["warn", "Done, with warnings"], failed: ["bad", "The chain had a problem"], stopped: ["stop", "Stopped"] };
     const [kind, title] = heads[cr.status] || heads.failed;
@@ -2714,7 +2719,8 @@ function openChainRun(id) {
         h("ol", { class: "steps-list live" }, cr.steps.map((x) => {
           const t = S.tools.find((y) => y.id === x.tool) || { name: x.name, icon: "terminal", color: "slate" };
           const st = x.status === "running" ? h("span", { class: "badge run" }, h("span", { class: "dot-pulse" }), " Running") :
-            x.status === "waiting" ? h("span", { class: "badge stop" }, "Waiting") : statusBadge(x.status === "skipped" ? "stopped" : x.status);
+            x.status === "waiting" ? h("span", { class: "badge stop" }, "Waiting") :
+            x.status === "asking" ? h("span", { class: "badge warn" }, "Needs your OK") : statusBadge(x.status === "skipped" ? "stopped" : x.status);
           if (x.status === "skipped") st.textContent = "Skipped";
           return h("li", { class: x.status }, square(t, 32),
             h("div", {}, h("strong", {}, x.name), h("span", { class: "meta" }, x.message || x.use)), st,
@@ -2723,6 +2729,8 @@ function openChainRun(id) {
             x.run_id && x.status === "running" ? h("button", { type: "button", class: "link", style: "min-height:0", onclick: () => openRunning(x.run_id) }, "Watch") : null);
         }))),
       h("footer", {}, h("span", {}), h("div", { class: "right" },
+        asking ? [h("button", { type: "button", class: "btn", onclick: reply("skip") }, "Skip this step"),
+          h("button", { type: "button", class: "btn primary", onclick: reply("go") }, `Run ${asking.name}`)] : null,
         running ? h("button", { type: "button", class: "btn", onclick: async () => { try { await api(`chains/runs/${id}/stop`, { method: "POST", body: {} }); } catch (e) { toast(e.message); } } }, "Stop the chain") : null,
         h("button", { type: "button", class: "btn primary", onclick: closeModal }, running ? "Keep working" : "Done"))));
   }
@@ -2735,6 +2743,43 @@ function openChainRun(id) {
 /* ---------- import ---------- */
 const KIND_WORDS = { program: "Tool", module: "Helper", data: "Data", env: "Keys", doc: "Notes", deps: "Packages", other: "Other", skip: "Left out" };
 function sizeText(n) { return n >= 1073741824 ? `${(n / 1073741824).toFixed(1)} GB` : kb(n); }
+
+async function openBackup() {
+  let st = null, err = "", busy = false, remote = "";
+  const dialog = h("section", { class: "dialog narrow", role: "dialog", "aria-modal": "true", "aria-labelledby": "bk-title" });
+  async function load() { try { st = await api("backup/state"); remote = st.remote || ""; err = ""; } catch (e) { err = e.message; } }
+  const when = (t) => (t ? new Date(t * 1000).toLocaleString() : "never");
+  async function post(path, body) {
+    busy = true; err = ""; draw();
+    try { st = await api(path, { method: "POST", body }); remote = st.remote || ""; } catch (e) { err = e.message; await load(); }
+    busy = false; draw();
+  }
+  function draw() {
+    dialog.replaceChildren(
+      h("header", {}, h("div", { class: "titles" }, h("h1", { id: "bk-title" }, "Back up scripts"),
+        h("p", {}, "A copy of all your tools in Git, with every change kept. Only code and notes: never keys, data or results.")),
+        h("button", { type: "button", class: "x", "aria-label": "Close", onclick: closeModal, html: ICON.close })),
+      h("div", { class: "body" },
+        !st ? h("p", { class: "help" }, "Looking…") : [
+          !st.git ? h("div", { class: "notice warn" }, "Git isn't installed on this computer. Install it from git-scm.com and come back.") : null,
+          h("p", { class: "help", style: "margin:0" }, `Last backup: ${when(st.last_ok)}${st.commits ? ` · ${st.commits} saved version${st.commits === 1 ? "" : "s"}` : ""}`),
+          st.last_note ? h("p", { class: "help", style: "margin:4px 0 0" }, st.last_note) : null,
+          h("div", { class: "field", style: "margin-top:14px" }, h("label", { for: "bk-r" }, "Send a copy to your own Git repository (optional)"),
+            h("input", { id: "bk-r", class: "input", value: remote, placeholder: "https://github.com/you/my-scripts.git", oninput: (e) => { remote = e.target.value; } }),
+            h("span", { class: "help" }, "Use a private repository. Git asks you to sign in the first time; traPYze never sees the password.")),
+          h("div", { class: "toggle-row", style: "border:0;padding:8px 0 0" },
+            h("div", { class: "t" }, h("span", { id: "bk-a" }, "Back up once a day"), h("span", { class: "help" }, "When no tool is running.")),
+            h("button", { type: "button", class: "switch", "aria-pressed": String(!!st.auto), "aria-labelledby": "bk-a", disabled: !st.git, onclick: () => post("backup/settings", { auto: !st.auto }) },
+              h("span", { class: "track" }), h("span", { class: "knob" })))],
+        err ? h("div", { class: "notice warn", role: "alert", style: "margin-top:12px" }, err) : null),
+      h("footer", {}, h("button", { type: "button", class: "btn", onclick: closeModal }, "Close"),
+        h("div", { class: "right" },
+          h("button", { type: "button", class: "btn", disabled: busy || !st || !st.git, onclick: () => post("backup/settings", { remote }) }, "Save the address"),
+          h("button", { type: "button", class: "btn primary", disabled: busy || !st || !st.git,
+            onclick: async () => { if (remote !== (st.remote || "")) { await post("backup/settings", { remote }); if (err) return; } post("backup/run", {}); } }, busy ? "Working…" : "Back up now"))));
+  }
+  draw(); showModal(dialog); await load(); draw();
+}
 
 async function openStorage() {
   let st = null, err = "", note = "", timer = null, open = new Set(), sure = false;

@@ -151,6 +151,33 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(status, "done")
         self.assertEqual(waits, [60])
 
+    def test_chain_step_waits_for_an_ok(self):
+        import time as _t
+        a, b = script(self.home, "first", 'print(1)'), script(self.home, "second", 'print(2)')
+        tools = [a, b]
+        chains, presets = Chains(self.home.internal), Presets(self.home.internal)
+        chain = chains.save({"name": "Ask", "steps": [{"tool": "first"}, {"tool": "second", "ask": True}]}, tools, presets)
+        self.assertTrue(chains.all()[0].steps[1].ask)
+        by_id = {t.id: t for t in tools}
+        start = lambda tid, chosen: Run(self.home, by_id[tid], chosen, engine=None).start()  # noqa: E731
+        asked = []
+        for decision, expect in (("go", ["done", "done"]), ("skip", ["done", "skipped"]), ("stop", ["done", "skipped"])):
+            cr = ChainRun(chain, [{}, {}], {}, start, on_ask=lambda c, s: asked.append(s["name"])).begin()
+            for _ in range(100):
+                if cr.steps[1]["status"] == "asking":
+                    break
+                _t.sleep(0.1)
+            self.assertEqual(cr.steps[1]["status"], "asking")
+            cr.answer(decision)
+            cr.wait(60)
+            self.assertEqual([s["status"] for s in cr.steps], expect)
+        self.assertEqual(cr.status, "stopped")
+        cr = ChainRun(chain, [{}, {}], {}, start, ask_wait=1).begin()
+        self.assertEqual(cr.wait(60), "stopped")
+        self.assertIn("No answer", cr.steps[1]["message"])
+        with self.assertRaises(StoreError):
+            cr.answer("maybe")
+
     def test_looks(self):
         looks = Looks(self.home.internal)
         self.assertEqual(looks.update({"theme": "dark", "accent": "teal"})["theme"], "dark")
