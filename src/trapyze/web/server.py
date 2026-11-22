@@ -33,6 +33,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 from .. import __version__
 from ..apis import PRESETS, helper, run_config
 from ..bin import Bin, BinError
+from .. import storage as store_room
 from ..scriptfiles import ScriptFileError, listing as script_listing, make_tool as give_tile
 from ..envmatch import match as match_env
 from ..freshness import checks, disk_free
@@ -126,6 +127,8 @@ class App:
         self.chains = Chains(home.internal)
         self.bin = Bin(home)
         self.library_job: dict[str, Any] = {}
+        self.storage_scan: dict[str, Any] = {}
+        self.storage_job = {"state": ""}
         self.looks = Looks(home.internal)
         self.layout = Layout(home.internal)
         self._suggest_cache: dict[tuple[str, float], str] = {}
@@ -803,6 +806,8 @@ class App:
                                      name="trapyze-packages", daemon=True).start()
                 if self.updates.due():
                     threading.Thread(target=self._quiet_update_check, name="trapyze-update-check", daemon=True).start()
+                if store_room.due(self.home) and not any(lr.run.running for lr in list(self.runs.values())):
+                    threading.Thread(target=lambda: store_room.tidy(self.home, self.bin), name="trapyze-tidy", daemon=True).start()
                 self._remind_renewals()
                 for plan in self.plans.all():
                     if plan.get("enabled", True):
@@ -1041,6 +1046,25 @@ class App:
         else:
             self.bin.put(tool.path.relative_to(self.home.scripts).as_posix(), tool.name, "tool")
         return self.tools()
+
+    def storage_start(self) -> None:
+        with self.lock:
+            if self.storage_job.get("state") == "running":
+                return
+            self.storage_job = {"state": "running"}
+
+        def work() -> None:
+            try:
+                from ..runner import find_engine
+                self.storage_scan = store_room.scan(self.home, self.bin, find_engine())
+                self.storage_job = {"state": "done"}
+            except Exception as exc:  # shown in the window
+                self.storage_job = {"state": "failed", "note": str(exc)}
+        threading.Thread(target=work, name="trapyze-storage", daemon=True).start()
+
+    def storage_state(self) -> dict[str, Any]:
+        return {"settings": store_room.read(self.home), "scan": self.storage_scan or None, "job": self.storage_job,
+                "free": disk_free(self.home.root)}
 
     def library_start(self, what: str, names: list[str] | None = None) -> None:
         from ..packages import PackageProblem, common_list
@@ -1479,6 +1503,41 @@ class Handler(BaseHTTPRequestHandler):
                                               "not compare with your real keys. Unlock it first to be sure.")
                 return self._json(HTTPStatus.OK, result)
             except (ShareProblem, LookupError, OSError) as exc:
+                return self._error(HTTPStatus.BAD_REQUEST, str(exc))
+        if parts and parts[0] == "storage" and len(parts) == 2:
+            try:
+                body = self._body() if method == "POST" else {}
+                if method == "GET" and parts[1] == "state":
+                    return self._json(HTTPStatus.OK, app.storage_state())
+                if method == "POST" and parts[1] == "scan":
+                    app.storage_start()
+                    return self._json(HTTPStatus.OK, app.storage_state())
+                if method == "POST" and parts[1] == "settings":
+                    store_room.change(app.home, body)
+                    app.storage_start()
+                    return self._json(HTTPStatus.OK, app.storage_state())
+                if method == "POST" and parts[1] == "tidy":
+                    with app.lock:
+                        busy = any(lr.run.running for lr in app.runs.values())
+                    if busy:
+                        return self._error(HTTPStatus.CONFLICT, "A tool is running. Tidy up when it has finished.")
+                    done = store_room.tidy(app.home, app.bin)
+                    app.storage_start()
+                    return self._json(HTTPStatus.OK, {**app.storage_state(), "done": done})
+                if method == "POST" and parts[1] == "empty-bin":
+                    n = app.bin.empty()
+                    app.storage_start()
+                    return self._json(HTTPStatus.OK, {**app.storage_state(), "emptied": n})
+                if method == "POST" and parts[1] == "uv-prune":
+                    from ..runner import find_engine
+                    engine = find_engine()
+                    if not engine:
+                        return self._error(HTTPStatus.BAD_REQUEST, "uv isn't installed, so there is no package cache to clean.")
+                    done = subprocess.run([engine, "cache", "prune"], capture_output=True, text=True, timeout=600,
+                                          creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                    app.storage_start()
+                    return self._json(HTTPStatus.OK, {**app.storage_state(), "note": (done.stderr or done.stdout or "").strip()[-300:]})
+            except (ValueError, OSError, subprocess.TimeoutExpired) as exc:
                 return self._error(HTTPStatus.BAD_REQUEST, str(exc))
         if parts and parts[0] == "library" and len(parts) == 2:
             from ..packages import PackageProblem, save_common

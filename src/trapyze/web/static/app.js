@@ -218,6 +218,7 @@ function toolsView() {
         { label: "Open the scripts folder", run: () => openPath(S.home + "/scripts") },
         { label: "Scripts and folders…", run: () => openScriptFiles("") },
         { label: "Package library…", run: () => openLibrary() },
+        { label: "Storage…", run: () => openStorage() },
         { label: "Recently removed…", run: () => openBin() },
         S.tools.length > 1 ? { label: "New chain…", run: () => openChainEditor(null) } : null,
         { sep: true },
@@ -2668,6 +2669,101 @@ function openChainRun(id) {
 
 /* ---------- import ---------- */
 const KIND_WORDS = { program: "Tool", module: "Helper", data: "Data", env: "Keys", doc: "Notes", deps: "Packages", other: "Other", skip: "Left out" };
+function sizeText(n) { return n >= 1073741824 ? `${(n / 1073741824).toFixed(1)} GB` : kb(n); }
+
+async function openStorage() {
+  let st = null, err = "", note = "", timer = null, open = new Set(), sure = false;
+  const dialog = h("section", { class: "dialog wide", role: "dialog", "aria-modal": "true", "aria-labelledby": "sg-title" });
+  const stop = () => { if (timer) { clearInterval(timer); timer = null; } };
+  async function load() { try { st = await api("storage/state"); err = ""; } catch (e) { err = e.message; } }
+  function poll() { stop(); timer = setInterval(async () => { await load(); draw(); if (!st || !st.job || st.job.state !== "running") stop(); }, 1500); }
+  async function post(what, body, after) {
+    try { const r = await api("storage/" + what, { method: "POST", body: body || {} }); st = { ...st, ...r }; err = ""; note = after ? after(r) : ""; poll(); }
+    catch (e) { err = e.message; }
+    draw();
+  }
+  const measuring = () => !st || !st.scan || (st.job && st.job.state === "running");
+  function tile(label, bytes, hint) {
+    return h("div", { style: "flex:1 1 130px;border:1px solid var(--line-2);border-radius:12px;padding:10px 12px;min-width:130px", title: hint || "" },
+      h("div", { class: "help" }, label), h("strong", { style: "font-size:18px" }, bytes == null ? "…" : sizeText(bytes)));
+  }
+  function body() {
+    const sc = st && st.scan, se = st && st.settings;
+    if (!st) return [h("p", { class: "help" }, "Loading…")];
+    const a = sc ? sc.areas : {};
+    const out = [];
+    if (err) out.push(h("div", { class: "notice warn", role: "alert" }, err));
+    if (note) out.push(h("div", { class: "notice" }, note));
+    out.push(h("div", { style: "display:flex;gap:10px;flex-wrap:wrap" },
+      tile("Results", sc ? a.results : null, "outputs/ : what tools made"), tile("Run logs", sc ? a.logs : null),
+      tile("Shared data", sc ? a.data : null, "data/ : yours, never tidied"), tile("Bin", sc ? a.bin : null, "Kept 30 days"),
+      tile("Old versions", sc ? a.history : null, "Earlier copies of scripts and package lists"),
+      sc && sc.uv_cache ? tile("Package cache", sc.uv_cache.bytes, "Shared by all tools") : null));
+    if (measuring()) out.push(h("p", { class: "help" }, "Measuring… the first time takes a moment when the data folder is big."));
+    // Tidy-up
+    out.push(h("div", { class: "field", style: "margin-top:14px" }, h("label", {}, "Automatic tidy-up"),
+      h("div", { class: "toggle-row" },
+        h("div", { class: "t" }, h("span", { id: "sg-auto" }, "Put old results and run logs in the bin, once a day"),
+          h("span", { class: "help" }, "They stay in the bin for 30 days and can be put back. Pinned runs and your data are never touched.")),
+        h("button", { type: "button", class: "switch", "aria-pressed": String(se.auto), "aria-labelledby": "sg-auto",
+          onclick: () => post("settings", { auto: !se.auto }) }, h("span", { class: "track" }), h("span", { class: "knob" }))),
+      h("div", { class: "row", style: "gap:14px;align-items:center;flex-wrap:wrap" },
+        h("label", { class: "help", for: "sg-days" }, "Older than"),
+        h("input", { id: "sg-days", class: "input", type: "number", min: "1", max: "3650", value: se.days, style: "max-width:90px",
+          onchange: (e) => post("settings", { days: e.target.value }) }), h("span", { class: "help" }, "days, but always keep the newest"),
+        h("input", { id: "sg-keep", class: "input", type: "number", min: "1", max: "500", value: se.keep_last, style: "max-width:80px", "aria-label": "Newest runs to keep",
+          onchange: (e) => post("settings", { keep_last: e.target.value }) }), h("span", { class: "help" }, "runs of each tool")),
+      h("div", { class: "row", style: "gap:12px;align-items:center;margin-top:8px" },
+        h("button", { type: "button", class: "btn primary", disabled: measuring() || !sc || !sc.tidy.runs,
+          onclick: () => post("tidy", {}, (r) => `Put ${r.done.moved} run${r.done.moved === 1 ? "" : "s"} in the bin (${sizeText(r.done.bytes)}).`) }, "Tidy up now"),
+        h("span", { class: "help" }, sc ? (sc.tidy.runs ? `Would put away ${sc.tidy.runs} run${sc.tidy.runs === 1 ? "" : "s"} (${sizeText(sc.tidy.bytes)}).` : "Nothing is old enough yet.") : ""),
+        se.last_tidy ? h("span", { class: "help" }, `Last tidy-up ${ago(se.last_tidy)}${se.last_freed ? `, ${sizeText(se.last_freed)}` : ""}.`) : null)));
+    // Per tool
+    if (sc && sc.tools.length) {
+      out.push(h("div", { class: "field" }, h("label", {}, "Results and logs per tool"),
+        h("div", { class: "datalist", style: "max-height:none" }, sc.tools.map((t) => [
+          h("div", { class: "datarow", style: "grid-template-columns:1fr auto auto auto;cursor:pointer", onclick: () => { open.has(t.id) ? open.delete(t.id) : open.add(t.id); draw(); } },
+            h("span", {}, h("strong", {}, t.name)), h("span", { class: "muted" }, `${t.runs.length} run${t.runs.length === 1 ? "" : "s"}`),
+            h("span", { class: "muted" }, t.last ? "last " + t.last.replace("T", " ") : ""), h("span", {}, sizeText(t.bytes))),
+          open.has(t.id) ? [
+            h("div", { class: "row", style: "padding:4px 0 4px 22px;gap:10px;align-items:center" },
+              h("label", { class: "help", for: "sg-t-" + t.id }, "Tidy this tool after"),
+              h("input", { id: "sg-t-" + t.id, class: "input", type: "number", min: "1", max: "3650", value: t.days || "", placeholder: String(se.days), style: "max-width:90px",
+                onchange: (e) => post("settings", { tool: t.id, tool_days: e.target.value }) }), h("span", { class: "help" }, "days (empty: the general setting)")),
+            ...t.runs.slice(0, 30).map((r) => h("div", { class: "datarow", style: "padding-left:22px;grid-template-columns:auto 1fr auto auto" },
+              h("input", { type: "checkbox", checked: r.pinned, title: "Keep this run", "aria-label": "Keep this run",
+                onchange: (e) => post("settings", { pin: r.id, pinned: e.target.checked }) }),
+              h("span", { class: "muted" }, r.when.replace("T", " ") + (r.status && r.status !== "ok" ? " · " + r.status : "")),
+              h("span", { class: "muted" }, r.pinned ? "kept" : r.old ? "old" : ""), h("span", {}, sizeText(r.bytes))))] : null]))));
+    }
+    // Data, bin, cache
+    if (sc && sc.data.length) {
+      out.push(h("div", { class: "field" }, h("label", {}, "Shared data (yours, never tidied)"),
+        h("div", { class: "datalist", style: "max-height:none" }, sc.data.map((d) => h("div", { class: "datarow", style: "grid-template-columns:1fr auto" },
+          h("span", { class: "n" }, d.name + (d.dir ? "/" : "")), h("span", {}, sizeText(d.bytes))))),
+        h("button", { type: "button", class: "link quiet", onclick: () => openPath(S.home + "/data") }, "Open the data folder")));
+    }
+    out.push(h("div", { class: "row", style: "gap:10px;flex-wrap:wrap;margin-top:6px" },
+      h("button", { type: "button", class: "btn", disabled: !sc || !a.bin, onclick: () => { if (!sure) { sure = true; draw(); return; } sure = false; post("empty-bin", {}, (r) => `Emptied the bin (${r.emptied} item${r.emptied === 1 ? "" : "s"}).`); } },
+        sure ? `Really? ${sizeText(a.bin)} goes for good` : "Empty the bin now"),
+      h("button", { type: "button", class: "btn", disabled: !sc || !sc.uv_cache, onclick: () => post("uv-prune", {}, () => "Removed package files no tool uses.") }, "Clean the package cache"),
+      h("span", { class: "help" }, st.free != null ? `${sizeText(st.free)} free on this disk.` : "")));
+    return out;
+  }
+  function draw() {
+    dialog.replaceChildren(
+      h("header", {}, h("div", { class: "titles" }, h("h1", { id: "sg-title" }, "Storage"),
+        h("p", {}, "What takes room, and the automatic tidy-up that keeps traPYze light.")),
+        h("button", { type: "button", class: "x", "aria-label": "Close", onclick: () => { stop(); closeModal(); }, html: ICON.close })),
+      h("div", { class: "body", style: "max-height:66vh;overflow:auto" }, body()),
+      h("footer", {}, h("button", { type: "button", class: "link quiet", onclick: () => post("scan", {}) }, "Measure again"),
+        h("div", { class: "right" }, h("button", { type: "button", class: "btn primary", onclick: () => { stop(); closeModal(); } }, "Close"))));
+  }
+  draw(); showModal(dialog);
+  await load(); if (!st.scan || st.job.state !== "running") { try { await api("storage/scan", { method: "POST", body: {} }); await load(); } catch (e) { err = e.message; } }
+  draw(); poll();
+}
+
 function kb(n) { return n < 1024 ? `${n} B` : n < 1048576 ? `${Math.round(n / 1024)} KB` : `${(n / 1048576).toFixed(n < 10485760 ? 1 : 0)} MB`; }
 
 function parentOf(p) { const i = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\")); return i > 0 ? p.slice(0, i) : p; }

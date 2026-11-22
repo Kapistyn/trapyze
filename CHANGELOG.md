@@ -2,6 +2,19 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.20.0] - 2026-11-22
+
+- **Storage, and an automatic tidy-up.** Under the top ⋯ menu, "Storage…" shows
+  what takes room: results, run logs, shared data, the bin, old versions and the
+  package cache, then every tool with its size (click it for its runs). Old
+  results and run logs are put in the bin once a day: older than 30 days, but the
+  newest 5 runs of each tool always stay, and a run you tick as "Keep this run" is
+  never touched. Days and the number of runs can be changed, also per tool.
+  "Tidy up now" does it at once and says first what it would move. Everything
+  goes to the bin for 30 days and can be put back from "Recently removed".
+  Your data folder is measured but never tidied. Also: Empty the bin now (asks
+  twice) and Clean the package cache.
+
 ## [0.19.1] - 2026-11-22
 
 - **Importing starts in your Downloads folder.** The Folder… and File… buttons of

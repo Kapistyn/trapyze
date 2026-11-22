@@ -189,6 +189,25 @@ class WebTests(unittest.TestCase):
             srv.pick_path("folder", "downloads")
         self.assertEqual(run.call_args[0][0][-1], str(self.home.data))
 
+    def test_storage_screen_over_the_api(self):
+        import time as _t
+        status, st = self.request("GET", "/api/storage/state")
+        self.assertEqual(status, 200)
+        self.assertTrue(st["settings"]["auto"] and st["settings"]["days"] == 30)
+        self.assertEqual(self.request("POST", "/api/storage/settings", {"days": 0})[0], 400)
+        status, st = self.request("POST", "/api/storage/settings", {"days": 14, "keep_last": 3})
+        self.assertEqual((status, st["settings"]["days"], st["settings"]["keep_last"]), (200, 14, 3))
+        for _ in range(50):
+            st = self.request("GET", "/api/storage/state")[1]
+            if st["job"]["state"] != "running":
+                break
+            _t.sleep(0.1)
+        self.assertEqual(st["job"]["state"], "done")
+        self.assertIn("results", st["scan"]["areas"])
+        status, st = self.request("POST", "/api/storage/tidy", {})
+        self.assertEqual((status, st["done"]["moved"]), (200, 0))
+        self.assertEqual(self.request("POST", "/api/storage/empty-bin", {})[1]["emptied"], 0)
+
     def test_library_overview_over_the_api(self):
         f = self.home.scripts / "uses_pandas.py"
         f.write_text('# /// script\n# dependencies = ["pandas>=2"]\n# [tool.trapyze]\n# name = "Uses pandas"\n# ///\nprint(1)\n')
