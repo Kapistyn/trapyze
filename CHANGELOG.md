@@ -2,6 +2,14 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.17.10] - 2026-11-22
+
+- **Packages used through a helper file now count.** A script that imports a
+  sibling file (`import rotation401k`) also needs what that file imports, such as
+  yfinance. "Give it a tile" now puts those packages in the new label, and the
+  Health check names a missing one ("It imports yfinance, which isn't in its
+  package list") with an "Add yfinance" button.
+
 ## [0.17.9] - 2026-11-22
 
 - **Scripts and folders.** Under the top ⋯ menu, "Scripts and folders…" lists

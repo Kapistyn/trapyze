@@ -70,7 +70,15 @@ def check(tool: Any, source: str | None = None) -> list[dict[str, Any]]:
         return out
 
     info = PyInfo(path.name, source)
-    used = {_norm(p): p for p in third_party(info.imports, _local_modules(path))}
+    local = _local_modules(path)
+    used = {_norm(p): p for p in third_party(info.imports, local)}
+    try:
+        from .importer import imports_through_helpers
+        through = {_norm(p): p for p in third_party(imports_through_helpers(path, source), local)} if (local - {path.stem}) else {}
+    except OSError:
+        through = {}
+    for key, pkg in through.items():
+        used.setdefault(key, pkg)
     listed = {_dep_name(d): d for d in tool.dependencies if d.strip()}
     for key, pkg in used.items():
         if key not in listed:

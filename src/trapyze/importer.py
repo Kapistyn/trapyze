@@ -931,6 +931,22 @@ def _helper_imports(py: dict[Path, PyInfo], info: PyInfo, local: set[str]) -> se
     return out
 
 
+def imports_through_helpers(path: Path, source: str | None = None) -> set[str]:
+    """What a script's own sibling files import (also what those import in turn): `import rotation401k`
+    brings in whatever rotation401k needs, such as yfinance."""
+    folder = path.parent
+    files = [p for p in folder.rglob("*.py")] if folder.name != "scripts" else list(folder.glob("*.py"))
+    py = {}
+    for p in files:
+        try:
+            py[p] = PyInfo(p.name, p.read_text(encoding="utf-8", errors="replace") if p != path or source is None else source)
+        except OSError:
+            continue
+    me = py.get(path) or PyInfo(path.name, source or "")
+    local = {p.stem for p in py} | {d.name for d in folder.iterdir() if d.is_dir()}
+    return _helper_imports(py, me, local)
+
+
 # Doing it --------------------------------------------------------------------------
 def apply(source: str | Path, home: Home, choices: dict[str, Any]) -> dict[str, Any]:
     """Copy and label, as chosen in the wizard. Reads the folder again first."""

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .home import Home, _program_files
-from .importer import PyInfo, _pretty, add_label, read_options, third_party
+from .importer import PyInfo, _pretty, add_label, imports_through_helpers, read_options, third_party
 
 
 class ScriptFileError(Exception):
@@ -62,5 +62,5 @@ def make_tool(home: Home, rel: str) -> str:
     settings, _ = read_options(info)
     label = {"name": _pretty(path.stem), "description": (info.docstring.splitlines()[0].strip() if info.docstring else "")[:160],
              "icon": "terminal", "color": "blue", "settings": settings}
-    path.write_text(add_label(source, label, third_party(info.imports, local)), encoding="utf-8")
+    path.write_text(add_label(source, label, third_party(info.imports | imports_through_helpers(path, source), local)), encoding="utf-8")
     return label["name"]

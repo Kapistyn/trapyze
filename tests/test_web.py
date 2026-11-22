@@ -144,7 +144,8 @@ class WebTests(unittest.TestCase):
         prog = self.home.scripts / "rot"
         prog.mkdir()
         (prog / "rot.py").write_text('# /// script\n# [tool.trapyze]\n# name = "Rot"\n# ///\nimport helper_mod\nprint(1)\n')
-        (prog / "fair_test.py").write_text('"""Fair test of the rotation."""\nimport argparse\nimport rot\n'
+        (prog / "helper_mod.py").write_text('def go():\n    import yfinance\n    return yfinance\n')
+        (prog / "fair_test.py").write_text('"""Fair test of the rotation."""\nimport argparse\nimport rot\nimport helper_mod\n'
                                            'ap = argparse.ArgumentParser()\nap.add_argument("--csv", default="p.csv")\nif __name__ == "__main__":\n    ap.parse_args()\n')
         files = {f["file"]: f for fo in self.request("GET", "/api/scripts/files")[1]["folders"] if fo["folder"] == "rot" for f in fo["files"]}
         self.assertEqual(files["rot.py"]["status"], "tile")
@@ -154,6 +155,7 @@ class WebTests(unittest.TestCase):
         text = (prog / "fair_test.py").read_text()
         self.assertIn("[tool.trapyze]", text)
         self.assertNotIn('"rot"', text)  # a sibling file is not a package
+        self.assertIn("yfinance", text)  # but what the sibling needs is
         self.assertIn("fair_test", [t["id"].split(".")[-1] for t in state["tools"]])
         self.assertEqual(self.request("POST", "/api/scripts/make-tool", {"rel": "../outside.py"})[0], 400)
 
