@@ -165,7 +165,7 @@ async function loadTools() {
   try {
     const data = await api("tools");
     Object.assign(S, { tools: data.tools, problems: data.problems, data: data.data, home: data.home,
-      chains: data.chains, activeChains: data.active_chains, looks: data.looks, icons: data.icons, desktop: data.desktop, schedule: data.schedule, notice: data.notice, renewals: data.renewals || [], programs: data.programs, layout: data.layout, topics: data.topics || [], update: data.update });
+      chains: data.chains, activeChains: data.active_chains, looks: data.looks, icons: data.icons, desktop: data.desktop, schedule: data.schedule, notice: data.notice, renewals: data.renewals || [], pins: data.pins || [], programs: data.programs, layout: data.layout, topics: data.topics || [], update: data.update });
     applyLooks();
     for (const c of data.active_chains || []) if (!S.chainRuns[c.id]) watchChain(c, false);
     for (const t of data.tools) if (t.running && !S.watching[t.running]) follow(t.running, t, false);
@@ -1526,6 +1526,21 @@ function outputsView() {
   return wrap;
 }
 
+function keepButton(r) {
+  if (!(S.looks || {}).keep_button) return null;
+  const kept = (S.pins || []).includes(r.run_id);
+  const b = h("button", { type: "button", class: "link", "aria-pressed": String(kept), title: kept ? "This run is kept: the tidy-up leaves it alone" : "Keep this run: the tidy-up leaves it alone",
+    onclick: async () => {
+      try {
+        const next = !(S.pins || []).includes(r.run_id);
+        const st = await api("storage/settings", { method: "POST", body: { pin: r.run_id, pinned: next } });
+        S.pins = st.settings.pins; b.setAttribute("aria-pressed", String(next)); b.textContent = next ? "Kept" : "Keep";
+        b.title = next ? "This run is kept: the tidy-up leaves it alone" : "Keep this run: the tidy-up leaves it alone";
+      } catch (e) { toast(e.message); }
+    } }, kept ? "Kept" : "Keep");
+  return b;
+}
+
 function runCard(r) {
   const tool = S.tools.find((t) => t.id === r.tool_id) || { id: r.tool_id, name: r.tool_name, icon: "terminal", color: "slate" };
   const settings = Object.entries(r.settings || {}).filter(([, v]) => v !== null && v !== "" && v !== false)
@@ -1535,6 +1550,7 @@ function runCard(r) {
       h("div", { class: "who" }, h("strong", {}, r.tool_name),
         h("span", { class: "meta", title: settings }, ago(r.started), r.seconds != null ? " · took " + duration(r.seconds) : "", settings ? " · " + settings : "")),
       statusBadge(r.status),
+      keepButton(r),
       h("button", { type: "button", class: "link", onclick: () => showLog(r) }, "Log"),
       S.tools.some((t) => t.id === r.tool_id) ? h("button", { type: "button", class: "link", onclick: () => openSettings(tool, r.settings) }, "Run again with these settings") : null));
   if (r.status === "failed" && r.cause) card.append(h("div", { class: "notice warn" }, r.cause));
@@ -2004,6 +2020,7 @@ function openResult(live) {
         h("button", { type: "button", class: "link", onclick: () => { closeModal(); const t = S.tools.find((x) => x.id === tool.id) || tool; openSettings(t, r.settings); } },
           r.status === "failed" || r.status === "stopped" ? "Try again" : "Run again"),
         r.output_dir ? h("button", { type: "button", class: "link", onclick: () => openPath(r.output_dir) }, "Open the folder") : null,
+        keepButton(r),
         r.status === "failed" ? h("button", { type: "button", class: "link", onclick: () => { closeModal(); const t = S.tools.find((x) => x.id === tool.id) || tool; openAI(t, { task: "why", run: r.run_id }); } }, "Ask AI why") : null),
       h("button", { type: "button", class: "btn primary big", autofocus: true, onclick: closeModal }, "Done")));
   showModal(dialog);
@@ -3340,6 +3357,11 @@ function desktopCard(l, set) {
       h("div", { class: "t" }, h("span", { id: "lf-n" }, "Tell me when a tool finishes"),
         h("span", { class: "help" }, d.tray ? "A notification by the clock, while traPYze is in the background." : "Needs the desktop add-on.")),
       h("button", { type: "button", class: "switch", "aria-pressed": String(l.notify !== false), "aria-labelledby": "lf-n", onclick: () => set({ notify: l.notify === false }) },
+        h("span", { class: "track" }), h("span", { class: "knob" }))),
+    h("div", { class: "toggle-row", style: "border:0;padding:16px 0 0" },
+      h("div", { class: "t" }, h("span", { id: "lf-k" }, "Show a Keep button on results"),
+        h("span", { class: "help" }, "Keeps a run's results and log out of the automatic tidy-up (see Storage). Off by default; you can also tick runs in Storage.")),
+      h("button", { type: "button", class: "switch", "aria-pressed": String(!!l.keep_button), "aria-labelledby": "lf-k", onclick: () => set({ keep_button: !l.keep_button }) },
         h("span", { class: "track" }), h("span", { class: "knob" }))),
     d.shortcut ? h("div", { class: "row", style: "margin-top:16px" },
       h("button", { type: "button", class: "btn", onclick: async (e) => {

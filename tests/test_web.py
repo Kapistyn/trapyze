@@ -208,6 +208,14 @@ class WebTests(unittest.TestCase):
         self.assertEqual((status, st["done"]["moved"]), (200, 0))
         self.assertEqual(self.request("POST", "/api/storage/empty-bin", {})[1]["emptied"], 0)
 
+    def test_keep_button_option_and_pins_in_state(self):
+        self.assertFalse(self.request("GET", "/api/tools")[1]["looks"].get("keep_button"))
+        status, data = self.request("POST", "/api/looks/window", {"keep_button": True})
+        self.assertEqual(status, 200)
+        self.assertTrue(data["looks"]["keep_button"])
+        self.request("POST", "/api/storage/settings", {"pin": "some_run", "pinned": True})
+        self.assertEqual(self.request("GET", "/api/tools")[1]["pins"], ["some_run"])
+
     def test_library_overview_over_the_api(self):
         f = self.home.scripts / "uses_pandas.py"
         f.write_text('# /// script\n# dependencies = ["pandas>=2"]\n# [tool.trapyze]\n# name = "Uses pandas"\n# ///\nprint(1)\n')

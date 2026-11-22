@@ -313,7 +313,7 @@ class Looks:
     """{"theme", "accent", "density", "celebrate", "tools": {tool_id: {"icon", "color", "image"}}}"""
 
     DEFAULT = {"theme": "auto", "accent": "blue", "density": "comfortable", "celebrate": True,
-               "window": "app", "window_size": "maximized", "notify": True, "editor": "", "tools": {}}
+               "window": "app", "window_size": "maximized", "notify": True, "keep_button": False, "editor": "", "tools": {}}
 
     def __init__(self, internal: Path):
         self.path = internal / "looks.json"
@@ -351,6 +351,8 @@ class Looks:
                 data["window_size"] = body["window_size"]
             if "notify" in body:
                 data["notify"] = bool(body["notify"])
+            if "keep_button" in body:
+                data["keep_button"] = bool(body["keep_button"])
             if "editor" in body:
                 data["editor"] = str(body["editor"] or "")[:40]
             _write(self.path, data)

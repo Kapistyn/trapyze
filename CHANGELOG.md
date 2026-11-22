@@ -2,6 +2,13 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.20.1] - 2026-11-22
+
+- **A Keep button on results, as an option.** Look and feel has a new switch,
+  "Show a Keep button on results" (off by default). When it is on, every result in
+  the history and in the result window has a Keep / Kept button. A kept run stays
+  out of the automatic tidy-up. Runs can always be ticked in Storage as well.
+
 ## [0.20.0] - 2026-11-22
 
 - **Storage, and an automatic tidy-up.** Under the top ⋯ menu, "Storage…" shows

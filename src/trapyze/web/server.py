@@ -210,6 +210,7 @@ class App:
             "notice": getattr(self, "notice", ""),
             "update": self.update_info(),
             "renewals": self.renewals_due(),
+            "pins": store_room.read(self.home)["pins"],
         }
 
     def suggestions(self, tools: list[Tool] | None = None) -> dict[str, str]:
