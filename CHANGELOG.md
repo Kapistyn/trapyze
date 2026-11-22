@@ -2,6 +2,15 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.20.2] - 2026-11-22
+
+- **Update a program from a file or folder.** A script you changed outside traPYze
+  (with your AI, say) can now replace the one in its program: tile menu, "Update from a
+  file or folder…", or in Scripts and folders. traPYze lists what is new, changed or the
+  same, and copies the ones you tick. A script that comes without a label keeps the old
+  tile, name, settings, connections and packages. What was replaced is kept in
+  `scripts/_replaced`.
+
 ## [0.20.1] - 2026-11-22
 
 - **A Keep button on results, as an option.** Look and feel has a new switch,

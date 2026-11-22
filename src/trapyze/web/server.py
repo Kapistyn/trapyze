@@ -34,7 +34,7 @@ from .. import __version__
 from ..apis import PRESETS, helper, run_config
 from ..bin import Bin, BinError
 from .. import storage as store_room
-from ..scriptfiles import ScriptFileError, listing as script_listing, make_tool as give_tile
+from ..scriptfiles import ScriptFileError, listing as script_listing, make_tool as give_tile, update_apply as script_update_apply, update_plan as script_update_plan
 from ..envmatch import match as match_env
 from ..freshness import checks, disk_free
 from ..schedule import NeedsPassword, Plans, System, check_when, describe, nice_time, next_times, sync as sync_plan
@@ -1705,6 +1705,14 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 if method == "GET" and parts[1] == "files":
                     return self._json(HTTPStatus.OK, {"folders": script_listing(app.home)})
+                if method == "POST" and parts[1] in ("update-scan", "update-apply"):
+                    body = self._body()
+                    if parts[1] == "update-scan":
+                        return self._json(HTTPStatus.OK, script_update_plan(app.home, str(body.get("program", "")), str(body.get("source", ""))))
+                    only = body.get("only")
+                    done = script_update_apply(app.home, str(body.get("program", "")), str(body.get("source", "")),
+                                               [str(x) for x in only] if isinstance(only, list) else None)
+                    return self._json(HTTPStatus.OK, {"report": done, **app.tools()})
                 if method == "POST" and parts[1] == "make-tool":
                     name = give_tile(app.home, str(self._body().get("rel", "")))
                     return self._json(HTTPStatus.OK, {"name": name, **app.tools()})

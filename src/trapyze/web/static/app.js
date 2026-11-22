@@ -495,6 +495,7 @@ function tileMenu(it, anchor) {
       const others = S.tools.filter((t) => t.group === o.group && t.id !== o.id);
       items.push({ sep: true }, { head: "Program: " + prog.name });
       items.push({ label: "Scripts in this program…", run: () => openScriptFiles(o.group) });
+      items.push({ label: "Update from a file or folder…", run: () => openUpdateProgram(o.group) });
       if (prog.readme) items.push({ label: "Read me", run: () => openPath(`${S.home}/scripts/${o.group}/${prog.readme}`) });
       items.push({ label: "Open the program folder", run: () => openPath(`${S.home}/scripts/${o.group}`) });
     }
@@ -566,6 +567,52 @@ async function openLibrary() {
   await load(); if (job() && job().state === "running") poll(); draw();
 }
 
+function openUpdateProgram(group) {
+  const prog = (S.programs || {})[group] || { name: group };
+  const st = { path: "", plan: null, busy: false, picks: {} };
+  const dialog = h("section", { class: "dialog", role: "dialog", "aria-modal": "true", "aria-labelledby": "up-title" });
+  const words = { new: "New file", changed: "Changed", same: "Same as now" };
+  async function pick(kind) {
+    try { const r = await api("pick", { method: "POST", body: { kind, start: st.path ? parentOf(st.path) : "downloads" } });
+      if (r.path) { st.path = r.path; await look(); } } catch (e) { toast(e.message); }
+  }
+  async function look() {
+    if (!st.path.trim()) return;
+    try { st.plan = await api("scripts/update-scan", { method: "POST", body: { program: group, source: st.path } });
+      st.picks = {}; st.plan.items.forEach((i) => { st.picks[i.to] = i.state !== "same"; }); draw(); }
+    catch (e) { st.plan = null; toast(e.message); draw(); }
+  }
+  function draw() {
+    const input = h("input", { type: "text", value: st.path, placeholder: "A script or a folder, for example in Downloads", "aria-label": "Path",
+      onkeydown: (e) => { if (e.key === "Enter") { st.path = e.target.value; look(); } }, onchange: (e) => { st.path = e.target.value; } });
+    const chosen = st.plan ? st.plan.items.filter((i) => st.picks[i.to]) : [];
+    dialog.replaceChildren(
+      h("header", {}, h("div", { class: "titles" }, h("h1", { id: "up-title" }, `Update “${prog.name}”`),
+        h("p", {}, "Point to a changed script or a folder with changed scripts. They replace the ones in this program; tiles, settings and connections stay. What they replace is kept in scripts/_replaced.")),
+        h("button", { type: "button", class: "x", "aria-label": "Close", onclick: closeModal, html: ICON.close })),
+      h("div", { class: "body" },
+        h("div", { class: "row", style: "gap:8px" }, input,
+          h("button", { type: "button", class: "btn small", onclick: () => pick("file") }, "Choose a file…"),
+          h("button", { type: "button", class: "btn small", onclick: () => pick("folder") }, "Choose a folder…"),
+          h("button", { type: "button", class: "btn small soft", onclick: () => { st.path = input.value; look(); } }, "Look")),
+        st.plan ? h("div", { style: "margin-top:12px;max-height:45vh;overflow:auto" }, st.plan.items.map((i) => h("label", { class: "datarow", style: "grid-template-columns:auto 1fr auto auto;gap:10px" },
+          h("input", { type: "checkbox", checked: !!st.picks[i.to], disabled: i.state === "same", onchange: (e) => { st.picks[i.to] = e.target.checked; draw(); } }),
+          h("span", { class: "n" }, i.to + (i.from !== i.to ? `  ← ${i.from}` : "")),
+          h("span", { class: "muted" }, words[i.state]),
+          h("span", { class: "muted" }, i.state === "same" ? "" : i.label)))) : null),
+      h("footer", {}, h("span", {}), h("div", { class: "right" },
+        h("button", { type: "button", class: "btn", onclick: closeModal }, "Cancel"),
+        h("button", { type: "button", class: "btn primary", disabled: !chosen.length || st.busy, onclick: async () => {
+          st.busy = true; draw();
+          try { const r = await api("scripts/update-apply", { method: "POST", body: { program: group, source: st.path, only: chosen.map((i) => i.to) } });
+            applyTools(r); closeModal(); render();
+            const n = r.report.updated.length + r.report.added.length;
+            toast(`${n} script${n === 1 ? "" : "s"} updated.` + (r.report.notes.length ? " " + r.report.notes[0] : "")); }
+          catch (e) { st.busy = false; toast(e.message); draw(); } } }, chosen.length ? `Update ${chosen.length}` : "Update"))));
+  }
+  draw(); showModal(dialog);
+}
+
 async function openScriptFiles(focus) {
   let folders = [];
   try { folders = (await api("scripts/files")).folders; } catch (e) { toast(e.message); return; }
@@ -580,6 +627,7 @@ async function openScriptFiles(focus) {
       h("div", { class: "body", style: "max-height:60vh;overflow:auto" }, shown.map((f) => h("div", { class: "field" },
         h("div", { class: "row", style: "justify-content:space-between;gap:12px" },
           h("strong", {}, f.name + (f.program ? "" : "")),
+          f.program ? h("button", { type: "button", class: "link quiet", onclick: () => openUpdateProgram(f.folder) }, "Update from a file or folder…") : null,
           h("button", { type: "button", class: "link quiet", onclick: () => openPath(`${S.home}/scripts${f.folder ? "/" + f.folder : ""}`) }, "Open folder")),
         f.files.length ? f.files.map((x) => h("div", { class: "datarow", style: "grid-template-columns:1fr auto auto", title: x.problem || x.rel },
           h("span", { class: "n" }, x.file),

@@ -159,6 +159,33 @@ class WebTests(unittest.TestCase):
         self.assertIn("fair_test", [t["id"].split(".")[-1] for t in state["tools"]])
         self.assertEqual(self.request("POST", "/api/scripts/make-tool", {"rel": "../outside.py"})[0], 400)
 
+    def test_update_a_program_from_outside_keeps_the_tile(self):
+        prog = self.home.scripts / "rot"
+        prog.mkdir()
+        (prog / "rotation401k.py").write_text('# /// script\n# dependencies = ["pandas"]\n# [tool.trapyze]\n# name = "Rotation"\n# ///\nprint("old")\n')
+        (prog / "fair_test.py").write_text('# /// script\n# [tool.trapyze]\n# name = "Fair test"\n# ///\nprint("same")\n')
+        outside = Path(tempfile.mkdtemp())
+        (outside / "rotation401k.py").write_text('print("new")\n')           # edited elsewhere: no label
+        (outside / "fair_test.py").write_text('print("same")\n')              # unchanged body
+        (outside / "extra.py").write_text('print("extra")\n')
+        status, plan = self.request("POST", "/api/scripts/update-scan", {"program": "rot", "source": str(outside)})
+        self.assertEqual(status, 200)
+        states = {i["to"]: (i["state"], i["label"]) for i in plan["items"]}
+        self.assertEqual(states["rotation401k.py"], ("changed", "keeps its tile"))
+        self.assertEqual(states["extra.py"][0], "new")
+        status, done = self.request("POST", "/api/scripts/update-apply", {"program": "rot", "source": str(outside / "rotation401k.py")})
+        self.assertEqual(status, 200)
+        self.assertEqual(done["report"]["updated"], ["rotation401k.py"])
+        text = (prog / "rotation401k.py").read_text()
+        self.assertIn('print("new")', text)
+        self.assertIn('name = "Rotation"', text)
+        self.assertIn("pandas", text)
+        self.assertIn("rotation401k", [t["id"].split(".")[-1] for t in done["tools"]])
+        backups = list((self.home.scripts / "_replaced").glob("rot-update-*/rotation401k.py"))
+        self.assertIn('print("old")', backups[0].read_text())
+        self.assertEqual(self.request("POST", "/api/scripts/update-scan", {"program": "rot", "source": str(prog)})[0], 400)
+        self.assertEqual(self.request("POST", "/api/scripts/update-scan", {"program": "../x", "source": str(outside)})[0], 400)
+
     def test_key_file_connection_reaches_the_tool_as_text(self):
         key = "-----BEGIN OPENSSH PRIVATE KEY-----\r\nAAAAB3Nza\r\n-----END OPENSSH PRIVATE KEY-----"
         (self.home.scripts / "needs_ssh.py").write_text(
