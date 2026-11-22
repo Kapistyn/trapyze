@@ -1199,8 +1199,25 @@ print(json.dumps(path or ""))
 """
 
 
+def downloads_folder() -> Path:
+    """Where downloaded scripts and files land. The Windows 'Downloads' folder, if it was moved, is read from the registry."""
+    if sys.platform == "win32":  # pragma: no cover - Windows only
+        try:
+            import winreg
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders") as k:
+                path = Path(os.path.expandvars(winreg.QueryValueEx(k, "{374DE290-123F-4565-9164-39C4925E467B}")[0]))
+                if path.is_dir():
+                    return path
+        except OSError:
+            pass
+    return Path.home() / "Downloads"
+
+
 def pick_path(kind: str, start: str) -> str:
     """Show the computer's own file or folder picker; return the chosen path or ''."""
+    if start == "downloads":
+        folder = downloads_folder()
+        start = str(folder if folder.is_dir() else Path.home())
     done = subprocess.run(
         [sys.executable, "-c", _PICKER, kind, start], capture_output=True, text=True, timeout=600,
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),

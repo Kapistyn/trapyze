@@ -2414,7 +2414,7 @@ function openImportEnv(initial) {
         h("button", { type: "button", class: "x", "aria-label": "Close", onclick: closeModal, html: ICON.close })),
       h("div", { class: "body" }, h("div", { class: "field" }, h("label", { for: "ie-path" }, "The file"),
         h("div", { class: "pathrow" }, path, h("button", { type: "button", class: "btn", onclick: async () => {
-          try { const r = await api("pick", { method: "POST", body: { kind: "file", start: S.home } }); if (r.path) path.value = r.path; } catch (e) { toast(e.message); } } }, "Browse…"))),
+          try { const r = await api("pick", { method: "POST", body: { kind: "file", start: "downloads" } }); if (r.path) path.value = r.path; } catch (e) { toast(e.message); } } }, "Browse…"))),
         error ? h("div", { class: "notice warn", role: "alert" }, error) : null,
         h("p", { class: "help", style: "margin:0" }, "Afterwards you can delete the original file, so the keys only live in the vault.")),
       h("footer", {}, h("span", {}), h("div", { class: "right" }, h("button", { type: "button", class: "btn", onclick: closeModal }, "Cancel"),
@@ -2670,6 +2670,8 @@ function openChainRun(id) {
 const KIND_WORDS = { program: "Tool", module: "Helper", data: "Data", env: "Keys", doc: "Notes", deps: "Packages", other: "Other", skip: "Left out" };
 function kb(n) { return n < 1024 ? `${n} B` : n < 1048576 ? `${Math.round(n / 1024)} KB` : `${(n / 1048576).toFixed(n < 10485760 ? 1 : 0)} MB`; }
 
+function parentOf(p) { const i = Math.max(p.lastIndexOf("/"), p.lastIndexOf("\\")); return i > 0 ? p.slice(0, i) : p; }
+
 function openImport() {
   const st = { step: "pick", path: "", busy: false, error: "", plan: null, choices: null, showAll: false, report: null, wsl: null };
   api("import/wsl").then((r) => { if (r.path) { st.wsl = r.path; if (st.step === "pick") draw(); } }).catch(() => {});
@@ -2677,7 +2679,7 @@ function openImport() {
   const header = (title, sub) => h("header", {}, h("div", { class: "titles" }, h("h1", { id: "im-title" }, title), h("p", {}, sub)),
     h("button", { type: "button", class: "x", "aria-label": "Close", onclick: closeModal, html: ICON.close }));
   async function browse(kind, start) {
-    try { const r = await api("pick", { method: "POST", body: { kind, start: start || st.path || "" } }); if (r.path) { st.path = r.path; draw(); } }
+    try { const r = await api("pick", { method: "POST", body: { kind, start: start || (st.path ? parentOf(st.path) : "downloads") } }); if (r.path) { st.path = r.path; draw(); } }
     catch (e) { st.error = e.message; draw(); }
   }
   async function readIt() {

@@ -179,6 +179,16 @@ class WebTests(unittest.TestCase):
         status, run = self.request("POST", "/api/runs", {"tool": "needs_ssh", "settings": {}, "allow": True})
         self.assertEqual(status, 201, run)
 
+    def test_pickers_start_in_downloads(self):
+        from unittest import mock
+        from trapyze.web import server as srv
+        with mock.patch.object(srv, "downloads_folder", return_value=self.home.data), \
+                mock.patch.object(srv.subprocess, "run") as run:
+            run.return_value.returncode = 0
+            run.return_value.stdout = '"x"'
+            srv.pick_path("folder", "downloads")
+        self.assertEqual(run.call_args[0][0][-1], str(self.home.data))
+
     def test_library_overview_over_the_api(self):
         f = self.home.scripts / "uses_pandas.py"
         f.write_text('# /// script\n# dependencies = ["pandas>=2"]\n# [tool.trapyze]\n# name = "Uses pandas"\n# ///\nprint(1)\n')

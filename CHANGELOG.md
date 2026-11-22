@@ -2,6 +2,13 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.19.1] - 2026-11-22
+
+- **Importing starts in your Downloads folder.** The Folder… and File… buttons of
+  the import window (and Browse… for a .env file) open in Downloads, where a
+  downloaded script lands, instead of the traPYze folder. After you've chosen
+  something, they open in its folder. A Downloads folder moved by Windows is found.
+
 ## [0.19.0] - 2026-11-22
 
 - **Key files in the vault.** A new kind of connection, "Key file (SSH key,
