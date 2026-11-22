@@ -209,8 +209,10 @@ class ChainRun:
 
     def __init__(self, chain: Chain, settings: list[dict[str, Any]], names: dict[str, str],
                  start: Callable[[str, dict[str, Any]], Any], busy_wait: float = 1800,
-                 on_done: Callable[["ChainRun"], Any] | None = None):
+                 on_done: Callable[["ChainRun"], Any] | None = None, retries: int = 0, retry_wait: float = 600):
         self.id = uuid.uuid4().hex[:12]
+        self.retries = max(0, retries)
+        self.retry_wait = retry_wait
         self.chain = chain
         self.settings = settings
         self.start_fn = start
@@ -284,6 +286,26 @@ class ChainRun:
             step["status"] = result.status if result else "failed"
             if result and result.cause:
                 step["message"] = result.cause
+            tries = 0
+            while step["status"] == "failed" and tries < self.retries and not self._stop.is_set():
+                tries += 1
+                step["tries"] = tries
+                step["message"] = f"Failed. Trying again in {max(1, round(self.retry_wait / 60))} min (try {tries + 1} of {self.retries + 1})."
+                if self._stop.wait(self.retry_wait):
+                    break
+                step["status"] = "running"
+                try:
+                    self._run = self.start_fn(step["tool"], self.settings[i])
+                except (Busy, SettingError, StoreError, LookupError, ValueError, OSError, RuntimeError) as exc:
+                    step["status"], step["message"] = "failed", str(exc)
+                    break
+                step["run_id"] = self._run.run_id
+                step["message"] = ""
+                result = self._run.wait()
+                self._run = None
+                step["status"] = result.status if result else "failed"
+                if result and result.cause:
+                    step["message"] = result.cause
             if step["status"] in ("failed", "stopped"):
                 problem = True
                 if step["status"] == "stopped":

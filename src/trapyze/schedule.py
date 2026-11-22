@@ -258,6 +258,8 @@ class Plans:
             "when": when, "enabled": bool(body.get("enabled", True)), "wake": bool(body.get("wake", True)),
             "logged_out": bool(body.get("logged_out", False)),
             "missed": "skip" if body.get("missed") == "skip" else "run",
+            "retries": _bounded(body.get("retries"), 0, 3, 0),
+            "retry_wait": _bounded(body.get("retry_wait"), 1, 120, 10),
         }
         with _lock:
             plans = self.all()
@@ -727,6 +729,17 @@ def remembered(home) -> dict[str, dict[str, Any]]:
         return {}
 
 
+def _bounded(value: Any, low: int, high: int, default: int) -> int:
+    try:
+        return max(low, min(high, int(value)))
+    except (TypeError, ValueError):
+        return default
+
+
+def retry_note(attempt: int, total: int, wait: int, cause: str = "") -> str:
+    return f"Failed{': ' + cause if cause else ''}. Trying again in {wait} min (try {attempt + 1} of {total + 1})."
+
+
 def plan_settings(home, plan: dict[str, Any]) -> dict[str, Any]:
     from .store import Presets, Step, step_settings
 
@@ -758,17 +771,26 @@ def run_here(home, plan: dict[str, Any], at: dt.datetime, how: str = "background
         if plan["target_kind"] == "tool":
             if plan["target"] not in tools:
                 raise StoreError(f"The tool '{plan['target']}' isn't in the scripts folder any more.")
-            run = start(plan["target"], plan_settings(home, plan))
-            plans.update_log(plan["id"], entry["occurrence"], run_id=run.run_id)
-            result = run.wait()
-            status, note = result.status, result.cause or ""
+            retries, wait = _bounded(plan.get("retries"), 0, 3, 0), _bounded(plan.get("retry_wait"), 1, 120, 10)
+            attempt = 0
+            while True:
+                run = start(plan["target"], plan_settings(home, plan))
+                plans.update_log(plan["id"], entry["occurrence"], run_id=run.run_id)
+                result = run.wait()
+                status, note = result.status, result.cause or ""
+                if status != "failed" or attempt >= retries:
+                    break
+                plans.update_log(plan["id"], entry["occurrence"], status="running", note=retry_note(attempt, retries, wait, note))
+                attempt += 1
+                time.sleep(wait * 60)
         else:
             chain = Chains(home.internal).get(plan["target"])
             missing = [s.tool for s in chain.steps if s.tool not in tools]
             if missing:
                 raise StoreError(f"The chain uses tools that aren't there any more: {', '.join(missing)}.")
             settings = [step_settings(s, Presets(home.internal), remembered(home)) for s in chain.steps]
-            cr = ChainRun(chain, settings, {t.id: t.name for t in tools.values()}, start).begin()
+            cr = ChainRun(chain, settings, {t.id: t.name for t in tools.values()}, start,
+                          retries=_bounded(plan.get("retries"), 0, 3, 0), retry_wait=_bounded(plan.get("retry_wait"), 1, 120, 10) * 60).begin()
             status = cr.wait()
             problems = [f"{s['name']}: {s['message']}" for s in cr.steps if s["status"] == "failed" and s["message"]]
             note = "; ".join(problems)

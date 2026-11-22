@@ -110,6 +110,47 @@ class StoreTests(unittest.TestCase):
         self.assertEqual([s["status"] for s in cr.steps], ["failed", "done"])
         self.assertEqual(len(chains.all()), 1)  # edited, not duplicated
 
+    def test_chain_step_tries_again_after_a_failure(self):
+        flaky = script(self.home, "flaky", 'import pathlib, sys\nm = pathlib.Path(__file__).with_name("count.txt")\n'
+                       'n = int(m.read_text()) + 1 if m.exists() else 1\nm.write_text(str(n))\nsys.exit(0 if n >= 3 else 1)')
+        tools = [flaky]
+        chains, presets = Chains(self.home.internal), Presets(self.home.internal)
+        chain = chains.save({"name": "Retry me", "steps": [{"tool": "flaky"}]}, tools, presets)
+        by_id = {t.id: t for t in tools}
+        start = lambda tid, chosen: Run(self.home, by_id[tid], chosen, engine=None).start()  # noqa: E731
+        cr = ChainRun(chain, [{}], {}, start, retries=1, retry_wait=0).begin()
+        self.assertEqual(cr.wait(60), "failed")
+        self.assertEqual(cr.steps[0]["tries"], 1)
+        (self.home.scripts / "count.txt").unlink()
+        cr = ChainRun(chain, [{}], {}, start, retries=2, retry_wait=0).begin()
+        self.assertEqual(cr.wait(60), "done")
+        self.assertEqual(cr.steps[0]["tries"], 2)
+
+    def test_plan_keeps_its_retry_settings(self):
+        from trapyze.schedule import Plans
+        tools = [script(self.home, "ok2", 'print(1)')]
+        plans = Plans(self.home.internal)
+        body = {"target_kind": "tool", "target": "ok2", "when": {"kind": "weekly", "days": [0], "times": ["07:30"]}}
+        plan = plans.save({**body, "retries": 2, "retry_wait": 5}, tools, [], Presets(self.home.internal))
+        self.assertEqual((plan["retries"], plan["retry_wait"]), (2, 5))
+        plan = plans.save({**body, "id": plan["id"], "retries": 99, "retry_wait": "x"}, tools, [], Presets(self.home.internal))
+        self.assertEqual((plan["retries"], plan["retry_wait"]), (3, 10))
+
+    def test_background_plan_tries_a_failed_tool_again(self):
+        from unittest import mock
+        from trapyze import schedule
+        script(self.home, "flaky2", 'import pathlib, sys\nm = pathlib.Path(__file__).with_name("count2.txt")\n'
+               'n = int(m.read_text()) + 1 if m.exists() else 1\nm.write_text(str(n))\nsys.exit(0 if n >= 2 else 1)')
+        tools = self.home.tools()[0]
+        plans = schedule.Plans(self.home.internal)
+        plan = plans.save({"target_kind": "tool", "target": "flaky2", "retries": 1, "retry_wait": 1,
+                           "when": {"kind": "weekly", "days": [0], "times": ["07:30"]}}, tools, [], Presets(self.home.internal))
+        waits = []
+        with mock.patch.object(schedule.time, "sleep", lambda s: waits.append(s)):
+            status = schedule.run_here(self.home, plan, __import__("datetime").datetime.now())
+        self.assertEqual(status, "done")
+        self.assertEqual(waits, [60])
+
     def test_looks(self):
         looks = Looks(self.home.internal)
         self.assertEqual(looks.update({"theme": "dark", "accent": "teal"})["theme"], "dark")

@@ -3148,6 +3148,7 @@ function planCard(p, system) {
           h("div", { class: "chips" },
             p.wake && system.wake ? h("span", { class: "chip" }, "Wakes the computer") : null,
             p.logged_out ? h("span", { class: "chip" }, "Also when logged out") : null,
+            p.retries ? h("span", { class: "chip" }, `Tries again up to ${p.retries}×`) : null,
             h("span", { class: "chip" }, p.missed === "run" ? "Catches up missed runs" : "Skips missed runs"))),
         h("div", { class: "plan-side" },
           h("button", { type: "button", class: "switch", "aria-pressed": String(!!p.enabled), "aria-label": p.enabled ? "Plan is on" : "Plan is off",
@@ -3190,7 +3191,7 @@ function openPlanEditor(existing, preset, message) {
   const system = (S.schedule || {}).system || {};
   const st = existing ? { ...existing, when: JSON.parse(JSON.stringify(existing.when)), password: "" } : {
     name: "", target_kind: (preset && preset.target_kind) || "tool", target: (preset && preset.target) || "", use: "last",
-    when: { kind: "weekly", days: [0, 1, 2, 3, 4], times: ["07:30"] }, wake: true, logged_out: false, missed: "run", enabled: true, password: "" };
+    when: { kind: "weekly", days: [0, 1, 2, 3, 4], times: ["07:30"] }, wake: true, logged_out: false, missed: "run", retries: 0, retry_wait: 10, enabled: true, password: "" };
   let error = message || "", preview = null, need = null, busy = false, timer = null;
   const keep = { weekly: null, interval: null, monthly: null, once: null };
   const dialog = h("section", { class: "dialog wide", role: "dialog", "aria-modal": "true", "aria-labelledby": "pl-title" });
@@ -3278,6 +3279,14 @@ function openPlanEditor(existing, preset, message) {
           h("div", { class: "seg", role: "group", "aria-labelledby": "pl-m" },
             [["run", "Run it when it's back on"], ["skip", "Skip that time"]].map(([v, t]) =>
               h("button", { type: "button", "aria-pressed": String(st.missed === v), onclick: () => { st.missed = v; draw(); } }, t)))),
+        h("div", { class: "field" }, h("span", { class: "lbl", id: "pl-r" }, "If it fails"),
+          h("div", { class: "seg", role: "group", "aria-labelledby": "pl-r" },
+            [[0, "Tell me"], [1, "Try once more"], [2, "Try twice more"], [3, "Try 3 times more"]].map(([v, t]) =>
+              h("button", { type: "button", "aria-pressed": String((st.retries || 0) === v), onclick: () => { st.retries = v; draw(); } }, t))),
+          (st.retries || 0) > 0 ? h("div", { class: "row", style: "gap:8px;margin-top:8px" }, h("label", { for: "pl-rw" }, "Wait"),
+            h("input", { id: "pl-rw", class: "input", type: "number", min: "1", max: "120", value: String(st.retry_wait || 10), style: "max-width:80px",
+              oninput: (e) => { st.retry_wait = Number(e.target.value) || 10; } }), h("span", {}, "minutes between tries")) : null,
+          h("span", { class: "help" }, (st.retries || 0) > 0 ? "A chain retries the step that failed, not the whole chain." : "You get a notification when it fails.")),
         h("div", { class: "field" }, h("label", { for: "pl-name" }, "Name (optional)"),
           h("input", { id: "pl-name", class: "input", value: st.name, placeholder: tool ? tool.name : "for example Morning routine", oninput: (e) => { st.name = e.target.value; } })),
         need ? h("div", { class: "notice warn", role: "alert", style: "flex-direction:column;align-items:stretch;gap:10px" },

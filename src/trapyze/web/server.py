@@ -653,7 +653,10 @@ class App:
         plan = getattr(live, "plan", None)
         if plan:
             r = live.run.result
-            self.plans.update_log(plan[0], plan[1], status=r.status if r else "failed",
+            status = r.status if r else "failed"
+            if status == "failed" and self._plan_retry(live, plan, (r.cause or "") if r else ""):
+                return
+            self.plans.update_log(plan[0], plan[1], status=status,
                                   note=(r.cause or "") if r else "", ended=time.time())
         if not self.desktop:
             return
@@ -668,6 +671,35 @@ class App:
             "stopped": ("Stopped", f"{name} was stopped."),
         }.get(status, (f"{name} couldn't finish", (r.cause if r and r.cause else "Open traPYze to see why.")))
         self.desktop.finished(title, message)
+
+    def _plan_retry(self, live: LiveRun, plan: tuple[str, str], cause: str) -> bool:
+        """A planned tool failed: try again later if the plan asks for it. True when a new try is waiting."""
+        from ..schedule import retry_note
+
+        try:
+            p = self.plans.get(plan[0])
+        except StoreError:
+            return False
+        total, wait = int(p.get("retries") or 0), int(p.get("retry_wait") or 10)
+        attempt = getattr(live, "attempt", 0)
+        if attempt >= total:
+            return False
+        self.plans.update_log(plan[0], plan[1], status="running", note=retry_note(attempt, total, wait, cause))
+
+        def again() -> None:
+            from ..schedule import plan_settings
+
+            try:
+                nxt = self.start(p["target"], plan_settings(self.home, p), unattended=True)
+                nxt.plan, nxt.attempt = plan, attempt + 1
+                self.plans.update_log(plan[0], plan[1], run_id=nxt.run.run_id)
+            except Exception as exc:
+                self.plans.update_log(plan[0], plan[1], status="failed", note=str(exc) or exc.__class__.__name__, ended=time.time())
+
+        timer = threading.Timer(wait * 60, again)
+        timer.daemon = True
+        timer.start()
+        return True
 
     def _chain_finished(self, chain: ChainRun) -> None:
         plan = getattr(chain, "plan", None)
@@ -684,7 +716,7 @@ class App:
         self.desktop.finished(title, message)
 
     def start_chain(self, chain: Chain, settings: list[dict[str, Any]], allow: bool = False,
-                    unattended: bool = False) -> ChainRun:
+                    unattended: bool = False, retries: int = 0, retry_wait: int = 10) -> ChainRun:
         """Check everything a chain needs before its first step starts, then run it."""
         tools = {t.id: t for t in self.home.tools()[0]}
         for step in chain.steps:
@@ -722,7 +754,7 @@ class App:
         names = {t.id: t.name for t in tools.values()}
         run = ChainRun(chain, settings, names,
                        lambda tool_id, chosen: self.start(tool_id, chosen, in_chain=True, unattended=unattended).run,
-                       on_done=self._chain_finished)
+                       on_done=self._chain_finished, retries=retries, retry_wait=retry_wait * 60)
         with self.lock:
             self.chain_runs[run.id] = run
             done = [k for k, v in self.chain_runs.items() if v.status != "running"]
@@ -754,7 +786,8 @@ class App:
                 self.plans.update_log(plan["id"], occurrence, run_id=live.run.run_id)
                 return {"started": True, "run_id": live.run.run_id}
             chain = self.chains.get(plan["target"])
-            cr = self.start_chain(chain, self.chain_settings(chain), unattended=True)
+            cr = self.start_chain(chain, self.chain_settings(chain), unattended=True,
+                                  retries=int(plan.get("retries") or 0), retry_wait=int(plan.get("retry_wait") or 10))
             cr.plan = (plan["id"], occurrence)
             return {"started": True, "chain_run": cr.summary()}
         except Exception as exc:  # anything that stops it starting: logged in plain words

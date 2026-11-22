@@ -2,6 +2,14 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.21.0] - 2026-11-22
+
+- **Plans can try again after a failure.** In a plan: "If it fails: Tell me / Try once more /
+  twice / 3 times", with the minutes to wait between tries (10 by default). For a tool, the
+  tool runs again; for a chain, the step that failed runs again and the rest carries on.
+  The plan's history shows "Trying again in 10 min (try 2 of 3)" while it waits. You get the
+  notification only when the last try has failed.
+
 ## [0.20.2] - 2026-11-22
 
 - **Update a program from a file or folder.** A script you changed outside traPYze
