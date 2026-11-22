@@ -93,5 +93,21 @@ class StorageTests(unittest.TestCase):
         self.assertFalse(storage.due(self.home) is False)  # auto is on and nothing ran yet: due
 
 
+class RemoveRunsTests(unittest.TestCase):
+    def test_chosen_runs_go_to_the_bin_and_can_come_back(self):
+        with tempfile.TemporaryDirectory() as d:
+            home = Home(d)
+            home.init(with_examples=False)
+            bad = {"run_id": make_run(home, "tool", 0, status="failed")[0]}
+            good = {"run_id": make_run(home, "tool", 1)[0]}
+            bin_ = Bin(home)
+            ids = storage.remove_runs(home, bin_, [bad["run_id"], "nope"])
+            self.assertEqual(len(ids), 1)
+            self.assertEqual([r["run_id"] for r in storage.runs(home)], [good["run_id"]])
+            bin_.restore(ids[0])
+            self.assertEqual(len(storage.runs(home)), 2)
+            self.assertEqual(storage.remove_runs(home, bin_, [good["run_id"]], busy={good["run_id"]}), [])
+
+
 if __name__ == "__main__":
     unittest.main()

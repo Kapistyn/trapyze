@@ -1869,6 +1869,12 @@ class Handler(BaseHTTPRequestHandler):
                     return self._error(HTTPStatus.BAD_REQUEST, str(exc))
                 return self._json(HTTPStatus.OK, chain_run.summary())
 
+        if route == ("POST", "history/remove") or (method == "POST" and parts == ["history", "remove"]):
+            ids = [str(x) for x in (self._body().get("ids") or []) if isinstance(x, str)][:500]
+            with app.lock:
+                busy = {k for k, lr in app.runs.items() if lr.run.running}
+            return self._json(HTTPStatus.OK, {"removed": store_room.remove_runs(app.home, app.bin, ids, busy)})
+
         if route == ("GET", "history"):
             tool = (query.get("tool") or [None])[0]
             limit = min(int((query.get("limit") or ["100"])[0]), 500)

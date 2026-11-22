@@ -170,6 +170,28 @@ def uv_cache(engine: str | None) -> Path | None:
 
 
 # Doing it ------------------------------------------------------------------------
+def remove_runs(home: Home, bin_: Bin, run_ids: list[str], busy: set[str] | None = None) -> list[str]:
+    """Put chosen runs (results and log) in the bin, for when the person decides they are not wanted. Returns the bin ids."""
+    wanted, busy = set(run_ids), busy or set()
+    ids = []
+    for r in runs(home):
+        if r["run_id"] not in wanted or r["status"] == "running" or r["run_id"] in busy:
+            continue
+        paths = [p for p in (r["output_dir"], r["run_dir"]) if p and p.exists()]
+        label = f"{r['tool_name'] or r['tool_id']}, run of {r['started']:%Y-%m-%d %H:%M}"
+        ids.append(bin_.put_paths(label, "results", paths, r["run_id"][:40]))
+        try:
+            if r["output_dir"]:
+                r["output_dir"].parent.rmdir()
+        except OSError:
+            pass
+    s = read(home)
+    if wanted & set(s["pins"]):
+        s["pins"] = [x for x in s["pins"] if x not in wanted]
+        write(home, s)
+    return ids
+
+
 def tidy(home: Home, bin_: Bin, settings: dict[str, Any] | None = None) -> dict[str, Any]:
     """Put old results and logs in the bin, one item per run. Returns what moved."""
     s = settings or read(home)

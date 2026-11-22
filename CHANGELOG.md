@@ -2,6 +2,13 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.22.1] - 2026-11-22
+
+- **Remove runs from the Outputs list.** Every run has a "Remove" button, and when the list
+  shows failed runs there is a button to remove all of them at once. Removed runs go to the
+  bin for 30 days, and the message afterwards has an Undo. Runs that are still running are
+  left alone.
+
 ## [0.22.0] - 2026-11-22
 
 - **Ask me first, in a chain.** Each step of a chain has a box "Ask me first". The chain

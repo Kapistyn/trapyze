@@ -1564,6 +1564,9 @@ function outputsView() {
         h("button", { type: "button", class: "pill", "aria-pressed": String(S.filter === id), onclick: () => { S.filter = id; render(); } }, label))));
   }
   const shown = runs.filter((r) => S.filter === "all" || r.tool_id === S.filter);
+  const failed = shown.filter((r) => r.status === "failed");
+  if (failed.length) wrap.append(h("div", { class: "row", style: "margin:0 0 8px" },
+    h("button", { type: "button", class: "btn small", onclick: () => removeRuns(failed) }, `Remove the ${failed.length} failed run${failed.length === 1 ? "" : "s"} from this list`)));
   if (!shown.length) { wrap.append(h("div", { class: "empty" }, h("h2", {}, "Nothing here yet"), "Run a tool and its results appear here.")); return wrap; }
   const groups = new Map();
   for (const r of shown) {
@@ -1590,6 +1593,18 @@ function keepButton(r) {
   return b;
 }
 
+async function removeRuns(list) {
+  try {
+    const { removed } = await api("history/remove", { method: "POST", body: { ids: list.map((r) => r.run_id) } });
+    S.history = null; render();
+    if (!removed.length) { toast("Nothing was removed."); return; }
+    toast(`Removed ${removed.length} run${removed.length === 1 ? "" : "s"}. They stay in the bin for 30 days.`, "Undo", async () => {
+      try { for (const id of removed) await api("bin/restore", { method: "POST", body: { id } }); S.history = null; await loadTools(); render(); }
+      catch (e) { toast(e.message); }
+    });
+  } catch (e) { toast(e.message); }
+}
+
 function runCard(r) {
   const tool = S.tools.find((t) => t.id === r.tool_id) || { id: r.tool_id, name: r.tool_name, icon: "terminal", color: "slate" };
   const settings = Object.entries(r.settings || {}).filter(([, v]) => v !== null && v !== "" && v !== false)
@@ -1601,6 +1616,7 @@ function runCard(r) {
       statusBadge(r.status),
       keepButton(r),
       h("button", { type: "button", class: "link", onclick: () => showLog(r) }, "Log"),
+      h("button", { type: "button", class: "link", title: "Take this run out of the list (it waits in the bin for 30 days)", onclick: () => removeRuns([r]) }, "Remove"),
       S.tools.some((t) => t.id === r.tool_id) ? h("button", { type: "button", class: "link", onclick: () => openSettings(tool, r.settings) }, "Run again with these settings") : null));
   if (r.status === "failed" && r.cause) card.append(h("div", { class: "notice warn" }, r.cause));
   for (const f of r.files || []) card.append(fileRow(r.output_dir, f));
