@@ -2,6 +2,12 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.22.3] - 2026-11-23
+
+- The README and the guide describe what came in the last versions: the Storage screen
+  and the bin, the package library, updating a program from outside, tries after a failure,
+  steps that ask first, the Git backup, removing runs and the Keep button.
+
 ## [0.22.2] - 2026-11-23
 
 - **No more "Add market_core" for files that sit in a neighbouring program.** A tool that

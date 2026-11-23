@@ -111,14 +111,16 @@ progress and tells you when it's done.
 ### Everything it made, in one place
 Every run with its files, the settings it used and its log, newest first.
 "Run again with these settings" is one click; a run that failed says why in
-plain words.
+plain words. Runs you don't want can be removed from the list, one by one or all
+failed ones at once; they wait 30 days in the bin.
 
 <p align="center"><img src="docs/images/outputs.png" width="820" alt="Outputs: every run with its files"></p>
 
 ### Plans that run by themselves, and a vault for your keys
 "Every weekday at 07:30", "Sundays at 20:00". Plans use your computer's own
 scheduler, so they run even when traPYze is closed; missed runs catch up.
-Chain tools together: fetch, then analyse, then mail. Keys and logins live
+Chain tools together: fetch, then analyse, then mail, with a step that waits for
+your OK where you want one. A plan can try again after a failure. Keys and logins live
 encrypted behind your PIN and only reach the tools you allowed.
 
 <table>
@@ -132,7 +134,9 @@ encrypted behind your PIN and only reach the tools you allowed.
 Point traPYze at a script, a folder, a .zip or a folder in WSL. It finds the
 main script, turns its command-line options into settings, works out the
 packages it needs, offers `.env` keys to the vault, and keeps the helper
-scripts out of sight. Your original is never changed.
+scripts out of sight. Your original is never changed. A script you changed
+elsewhere (with your AI, say) can be put back into its program with **Update
+from a file or folder**, keeping its tile, settings and keys.
 
 <p align="center"><img src="docs/images/import.png" width="820" alt="Importing a program folder"></p>
 
@@ -162,6 +166,13 @@ working script to start from.
 <td width="50%"><img src="docs/images/new-tool.png" alt="A new tool from a template"></td>
 </tr>
 </table>
+
+### Kept tidy, and backed up
+Old results and run logs are put away by themselves (into a bin where they wait
+30 days), and a Storage screen shows what takes room. All your tools share one
+package library, so a package is installed once. **Back up scripts** keeps every
+tool in a Git history and can send a copy to your own private repository: code
+and notes only, never keys or data.
 
 ### Light or dark, your colours, its own window
 Its own window with a tray icon (or your browser), light and dark themes,

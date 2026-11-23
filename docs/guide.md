@@ -15,6 +15,7 @@ Everything traPYze does, step by step. New here? Start with the [README](../READ
 - [Ready-made tools](#ready-made-tools)
 - [Importing a script or a whole program](#importing-a-script-or-a-whole-program)
 - [Package versions: pinned, updated after a test](#package-versions-pinned-updated-after-a-test)
+- [Keeping traPYze tidy and backed up](#keeping-trapyze-tidy-and-backed-up)
 - [Sharing a tool](#sharing-a-tool)
 - [Plans: runs by themselves](#plans-runs-by-themselves)
 - [Its own window and the tray icon](#its-own-window-and-the-tray-icon)
@@ -409,6 +410,36 @@ those versions every time.
 - **Go back to the previous versions** undoes the last change; traPYze keeps
   the last eight.
 
+## Keeping traPYze tidy and backed up
+
+Everything is under the **⋯** menu on the Tools screen.
+
+- **Storage…** shows what takes room: results, run logs, the bin, packages and
+  your data (never touched). Old results and logs are put away by themselves once
+  a day when no tool is running: older than 30 days, never the last 5 runs of a
+  tool, never a kept run. All of it is adjustable. With *Show a Keep button on
+  results* (Look and feel) a run can be kept from the Outputs screen; otherwise
+  tick runs in Storage.
+- **Recently removed…** is the bin. Removed tools, programs, results and runs
+  wait 30 days and come back with one click. On the Outputs screen every run has
+  a **Remove** button, and a button removes all failed runs of the list.
+- **Package library…** shows every package your tools use and which tool needs
+  which version, updates them all (each tested first, a required version is
+  kept), and installs a short list of common packages once so new tools start
+  fast.
+- **Scripts and folders…** shows the folders under `scripts/`, with their
+  helper files. A helper can be given a tile (**Give it a tile**).
+- **Update from a file or folder…** (a program's tile menu): point to a changed
+  script or a folder of changed scripts. traPYze lists what is new, changed or
+  the same and copies the ones you tick. A script without a label keeps the
+  old tile, name, settings, connections and packages. What it replaced is kept
+  in `scripts/_replaced`.
+- **Back up scripts…** keeps all tools in a Git history in `scripts/`, and
+  optionally sends a copy to a private repository of your own (Git asks for the
+  sign-in; traPYze never sees the password). Only code and notes go in, never
+  keys, data or results, and a script that contains a private key is held back.
+  Needs Git. *Back up once a day* is a switch in the same window.
+
 ## Sharing a tool
 
 In a tool's settings window, **Share** makes one file in `Outputs\Shared`:
@@ -454,6 +485,10 @@ scheduler, which starts `trapyze fire <plan>` at the right time:
   live, with a notification when it's done.
 - Plans that use connections need them marked *available to scheduled
   plans*, and permission is asked when you save the plan.
+- **If it fails** a plan can try again: once, twice or three times, with a wait
+  in minutes between tries (10 by default). A chain tries the step that failed
+  again and carries on. The history shows "Trying again in 10 min"; you get the
+  failure notification after the last try.
 - Every plan keeps a short history (done, problem, missed) with the reason.
 - If you change your Windows password, open plans that run while logged out
   and save them again.
@@ -504,10 +539,13 @@ without a terminal window.
 - **Chains**: under Tools, *New chain*. Pick the tools in order, and for each
   one the settings used last time, the standard settings or a preset. Choose
   whether the chain stops or carries on after a problem. A chain waits its
-  turn when another run is using the same shared data. From the terminal:
+  turn when another run is using the same shared data. Tick **Ask me first**
+  on a step and the chain stops before it, sends a notification and waits for
+  your OK (run it, skip it or stop; no answer within an hour stops the chain).
+  From the terminal:
   `trapyze chain list` and `trapyze chain run "Morning routine"`.
 - **Look and feel**: light, dark or matching the computer; six accent
-  colours; roomy or compact tiles; confetti on or off. Per tool: an icon, a
+  colours; roomy or compact tiles; confetti on or off; a Keep button on results (off by default). Per tool: an icon, a
   colour or your own picture (PNG, JPG or WebP, up to 300 KB). This is kept
   in traPYze's own folder; the scripts don't change.
 
