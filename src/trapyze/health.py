@@ -50,6 +50,13 @@ def _local_modules(path: Path) -> set[str]:
         return set()
     out = {p.stem for p in folder.glob("*.py")}
     out.update(p.name for p in folder.iterdir() if p.is_dir() and (p / "__init__.py").exists())
+    # A tool may reach into a neighbouring program on purpose (sys.path.insert(... "market_db"); import market_core).
+    # Those files are not packages from the internet, so they are never offered as one.
+    scripts = folder.parent if folder.parent.name == "scripts" else None
+    if scripts is not None:
+        for other in scripts.iterdir():
+            if other.is_dir() and other != folder and not other.name.startswith(("_", ".")):
+                out.update(p.stem for p in other.glob("*.py"))
     return out
 
 

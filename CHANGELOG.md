@@ -2,6 +2,14 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.22.2] - 2026-11-23
+
+- **No more "Add market_core" for files that sit in a neighbouring program.** A tool that
+  reaches into another program on purpose (the maps use `market_core` from the market
+  database) was told that `market_core` was a missing package. Adding it to the package
+  list made the run stop with "The packages this tool asks for don't fit together".
+  Files of other programs are now recognised as yours, not as packages.
+
 ## [0.22.1] - 2026-11-22
 
 - **Remove runs from the Outputs list.** Every run has a "Remove" button, and when the list

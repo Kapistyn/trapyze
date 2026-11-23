@@ -60,6 +60,15 @@ class HealthTests(Temp):
         self.assertIn("unused-package", c)  # requests; openpyxl is used indirectly and not reported
         self.assertNotIn("openpyxl", c["unused-package"]["title"])
 
+    def test_a_file_in_a_neighbouring_program_is_not_a_package(self):
+        scripts = self.dir / "scripts"
+        (scripts / "market_db").mkdir(parents=True)
+        (scripts / "market_db" / "market_core.py").write_text("x = 1\n")
+        (scripts / "maps").mkdir()
+        p = scripts / "maps" / "mood.py"
+        p.write_text(LABEL.format(deps='"pandas"', extra="") + "import pandas\ndef f():\n    import market_core\n", encoding="utf-8")
+        self.assertNotIn("missing-package", self.codes(read_tool(p)))
+
     def test_local_module_is_not_a_package(self):
         (self.dir / "helpers.py").write_text("x = 1\n")
         self.assertNotIn("missing-package", self.codes(self.tool("import helpers\n")))
