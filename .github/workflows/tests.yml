@@ -9,6 +9,7 @@ jobs:
   tests:
     name: ${{ matrix.os }} · Python ${{ matrix.python }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -18,7 +19,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
       - name: Run the tests
-        run: uv run --python ${{ matrix.python }} --with pytest --with pillow --with pandas --with markdown python -m pytest -q
+        run: uv run --python ${{ matrix.python }} --with pytest --with pytest-timeout --with pillow --with pandas --with markdown python -m pytest -q --timeout=180 --durations=5
 
   installers:
     name: installer scripts
