@@ -33,6 +33,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 from .. import __version__
 from ..apis import PRESETS, helper, run_config
 from ..bin import Bin, BinError
+from .. import scriptfiles
 from .. import backup as scripts_backup
 from .. import storage as store_room
 from ..scriptfiles import ScriptFileError, listing as script_listing, make_tool as give_tile, update_apply as script_update_apply, update_plan as script_update_plan
@@ -1095,6 +1096,16 @@ class App:
             self.bin.put(tool.path.relative_to(self.home.scripts).as_posix(), tool.name, "tool")
         return self.tools()
 
+    def busy_check_scripts(self, rel: str, rels: list[str]) -> None:
+        """Nothing is moved or renamed while a tool of that program (or that script) is running."""
+        from ..scriptfiles import ScriptFileError
+        parts = [Path(r).parts[0] if len(Path(r).parts) > 1 else Path(r).stem for r in ([rel] if rel else []) + rels]
+        with self.lock:
+            for lr in self.runs.values():
+                if lr.run.running and (lr.run.tool.group in parts or lr.run.tool.id in parts
+                                       or lr.run.tool.path.relative_to(self.home.scripts).as_posix() in ([rel] + rels)):
+                    raise ScriptFileError(f"{lr.run.tool.name} is running. Wait until it has finished.")
+
     def storage_start(self) -> None:
         with self.lock:
             if self.storage_job.get("state") == "running":
@@ -1764,12 +1775,33 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(HTTPStatus.OK, {"folders": script_listing(app.home)})
                 if method == "POST" and parts[1] in ("update-scan", "update-apply"):
                     body = self._body()
+                    remap = {str(k): str(v) for k, v in (body.get("remap") or {}).items()} if isinstance(body.get("remap"), dict) else None
                     if parts[1] == "update-scan":
-                        return self._json(HTTPStatus.OK, script_update_plan(app.home, str(body.get("program", "")), str(body.get("source", ""))))
+                        return self._json(HTTPStatus.OK, script_update_plan(app.home, str(body.get("program", "")), str(body.get("source", "")), remap))
                     only = body.get("only")
                     done = script_update_apply(app.home, str(body.get("program", "")), str(body.get("source", "")),
-                                               [str(x) for x in only] if isinstance(only, list) else None)
+                                               [str(x) for x in only] if isinstance(only, list) else None, remap)
                     return self._json(HTTPStatus.OK, {"report": done, **app.tools()})
+                if method == "GET" and parts[1] == "duplicates":
+                    return self._json(HTTPStatus.OK, {"pairs": scriptfiles.duplicates(app.home)})
+                if method == "POST" and parts[1] in ("move", "rename", "new-program", "compare", "discard", "rename-program"):
+                    body = self._body()
+                    rel = str(body.get("rel", ""))
+                    if parts[1] == "compare":
+                        return self._json(HTTPStatus.OK, scriptfiles.compare(app.home, rel, str(body.get("other", ""))))
+                    app.busy_check_scripts(rel if parts[1] != "new-program" else "", [str(x) for x in body.get("rels", [])] if parts[1] == "new-program" else [])
+                    with app.lock:
+                        if parts[1] == "move":
+                            done = scriptfiles.move_file(app.home, rel, str(body.get("program", "")), app.vault)
+                        elif parts[1] == "rename":
+                            done = scriptfiles.rename_file(app.home, rel, str(body.get("name", "")), app.vault)
+                        elif parts[1] == "rename-program":
+                            done = scriptfiles.rename_program(app.home, rel, str(body.get("name", "")), app.vault)
+                        elif parts[1] == "new-program":
+                            done = scriptfiles.new_program(app.home, str(body.get("name", "")), [str(x) for x in body.get("rels", [])], app.vault)
+                        else:
+                            done = {"bin": scriptfiles.discard_file(app.home, rel, app.bin)}
+                    return self._json(HTTPStatus.OK, {"done": done, **app.tools()})
                 if method == "POST" and parts[1] == "make-tool":
                     name = give_tile(app.home, str(self._body().get("rel", "")))
                     return self._json(HTTPStatus.OK, {"name": name, **app.tools()})

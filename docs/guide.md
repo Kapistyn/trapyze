@@ -429,11 +429,24 @@ Everything is under the **⋯** menu on the Tools screen.
   fast.
 - **Scripts and folders…** shows the folders under `scripts/`, with their
   helper files. A helper can be given a tile (**Give it a tile**).
+  Per script: **Move…** (into a program or out of one), **Rename…**; per
+  program: **Rename…**. Footer: **New program from loose scripts…** and
+  **Find duplicates…**. Tiles, plans, chains, presets, last settings, looks,
+  version history and key permissions follow a move or rename, so nothing is
+  lost. Nothing is moved while a tool of it runs. If a moved script imports a
+  neighbour that stayed behind, traPYze says so.
+- **Find duplicates…** lists scripts that are identical, nearly the same (90% or
+  more, ignoring the label block) or share a name once `(1)`, `copy`, `_v2`,
+  `_final` and the like are ignored. Pick which one goes to the bin (30 days).
 - **Update from a file or folder…** (a program's tile menu): point to a changed
   script or a folder of changed scripts. traPYze lists what is new, changed or
   the same and copies the ones you tick. A script without a label keeps the
   old tile, name, settings, connections and packages. What it replaced is kept
-  in `scripts/_replaced`.
+  in `scripts/_replaced`. When a file has a new name (`report_v2.py`,
+  `report (1).py`) traPYze says *Looks like a new version of report.py*, shows
+  lines added and removed and whether it is newer, and one click makes it
+  replace that script, keeping the tile. Copies in `scripts/_replaced` and
+  `scripts/_set_aside_*` go to the bin by themselves after 30 days.
 - **Back up scripts…** keeps all tools in a Git history in `scripts/`, and
   optionally sends a copy to a private repository of your own (Git asks for the
   sign-in; traPYze never sees the password). Only code and notes go in, never

@@ -186,6 +186,26 @@ class WebTests(unittest.TestCase):
         self.assertEqual(self.request("POST", "/api/scripts/update-scan", {"program": "rot", "source": str(prog)})[0], 400)
         self.assertEqual(self.request("POST", "/api/scripts/update-scan", {"program": "../x", "source": str(outside)})[0], 400)
 
+    def test_organise_endpoints(self):
+        H = '# /// script\n# [tool.trapyze]\n# name = "%s"\n# ///\nprint(1)\n'
+        (self.home.scripts / "alpha.py").write_text(H % "Alpha")
+        (self.home.scripts / "alpha (1).py").write_text(H % "Alpha" + "print(2)\n")
+        status, done = self.request("POST", "/api/scripts/new-program", {"name": "Group One", "rels": ["alpha.py"]})
+        self.assertEqual((status, done["done"]["folder"]), (200, "group_one"))
+        status, done = self.request("POST", "/api/scripts/move", {"rel": "alpha (1).py", "program": "group_one"})
+        self.assertEqual(status, 200)
+        status, dup = self.request("GET", "/api/scripts/duplicates")
+        self.assertEqual(status, 200)
+        self.assertTrue(dup["pairs"] == [] or dup["pairs"][0]["kind"] in ("nearly the same", "same name", "identical"))
+        status, cmp_ = self.request("POST", "/api/scripts/compare", {"rel": "group_one/alpha.py", "other": "group_one/alpha (1).py"})
+        self.assertEqual((status, cmp_["added"]), (200, 1))
+        status, done = self.request("POST", "/api/scripts/rename-program", {"rel": "group_one", "name": "Group Two"})
+        self.assertEqual((status, done["done"]["folder"]), (200, "group_two"))
+        status, done = self.request("POST", "/api/scripts/discard", {"rel": "group_two/alpha (1).py"})
+        self.assertEqual(status, 200)
+        self.assertFalse((self.home.scripts / "group_two" / "alpha (1).py").exists())
+        self.assertEqual(self.request("POST", "/api/scripts/move", {"rel": "../x.py", "program": ""})[0], 400)
+
     def test_key_file_connection_reaches_the_tool_as_text(self):
         key = "-----BEGIN OPENSSH PRIVATE KEY-----\r\nAAAAB3Nza\r\n-----END OPENSSH PRIVATE KEY-----"
         (self.home.scripts / "needs_ssh.py").write_text(

@@ -570,7 +570,7 @@ async function openLibrary() {
 
 function openUpdateProgram(group) {
   const prog = (S.programs || {})[group] || { name: group };
-  const st = { path: "", plan: null, busy: false, picks: {} };
+  const st = { path: "", plan: null, busy: false, picks: {}, remap: {} };
   const dialog = h("section", { class: "dialog", role: "dialog", "aria-modal": "true", "aria-labelledby": "up-title" });
   const words = { new: "New file", changed: "Changed", same: "Same as now" };
   async function pick(kind) {
@@ -579,7 +579,7 @@ function openUpdateProgram(group) {
   }
   async function look() {
     if (!st.path.trim()) return;
-    try { st.plan = await api("scripts/update-scan", { method: "POST", body: { program: group, source: st.path } });
+    try { st.plan = await api("scripts/update-scan", { method: "POST", body: { program: group, source: st.path, remap: st.remap } });
       st.picks = {}; st.plan.items.forEach((i) => { st.picks[i.to] = i.state !== "same"; }); draw(); }
     catch (e) { st.plan = null; toast(e.message); draw(); }
   }
@@ -599,13 +599,16 @@ function openUpdateProgram(group) {
         st.plan ? h("div", { style: "margin-top:12px;max-height:45vh;overflow:auto" }, st.plan.items.map((i) => h("label", { class: "datarow", style: "grid-template-columns:auto 1fr auto auto;gap:10px" },
           h("input", { type: "checkbox", checked: !!st.picks[i.to], disabled: i.state === "same", onchange: (e) => { st.picks[i.to] = e.target.checked; draw(); } }),
           h("span", { class: "n" }, i.to + (i.from !== i.to ? `  ← ${i.from}` : "")),
-          h("span", { class: "muted" }, words[i.state]),
-          h("span", { class: "muted" }, i.state === "same" ? "" : i.label)))) : null),
+          h("span", { class: "muted" }, words[i.state] + (i.diff ? ` (+${i.diff.added} −${i.diff.removed}${i.diff.newer ? ", newer" : ", older"})` : "")),
+          i.looks_like && i.looks_like.length ? h("button", { type: "button", class: "btn small soft", title: "Replace that script, keep its tile and settings",
+            onclick: (e) => { e.preventDefault(); st.remap[i.from] = i.looks_like[0].rel.split("/").slice(1).join("/"); look(); } },
+            `Looks like a new version of ${i.looks_like[0].name}`)
+            : h("span", { class: "muted" }, i.state === "same" ? "" : i.label)))) : null),
       h("footer", {}, h("span", {}), h("div", { class: "right" },
         h("button", { type: "button", class: "btn", onclick: closeModal }, "Cancel"),
         h("button", { type: "button", class: "btn primary", disabled: !chosen.length || st.busy, onclick: async () => {
           st.busy = true; draw();
-          try { const r = await api("scripts/update-apply", { method: "POST", body: { program: group, source: st.path, only: chosen.map((i) => i.to) } });
+          try { const r = await api("scripts/update-apply", { method: "POST", body: { program: group, source: st.path, only: chosen.map((i) => i.to), remap: st.remap } });
             applyTools(r); closeModal(); render();
             const n = r.report.updated.length + r.report.added.length;
             toast(`${n} script${n === 1 ? "" : "s"} updated.` + (r.report.notes.length ? " " + r.report.notes[0] : "")); }
@@ -629,6 +632,7 @@ async function openScriptFiles(focus) {
         h("div", { class: "row", style: "justify-content:space-between;gap:12px" },
           h("strong", {}, f.name + (f.program ? "" : "")),
           f.program ? h("button", { type: "button", class: "link quiet", onclick: () => openUpdateProgram(f.folder) }, "Update from a file or folder…") : null,
+          f.program ? h("button", { type: "button", class: "link quiet", onclick: () => askText("Rename the program", "Tiles, plans, chains and settings follow.", f.name, (v) => act("scripts/rename-program", { rel: f.folder, name: v }, `Renamed to ${v}.`)) }, "Rename…") : null,
           h("button", { type: "button", class: "link quiet", onclick: () => openPath(`${S.home}/scripts${f.folder ? "/" + f.folder : ""}`) }, "Open folder")),
         f.files.length ? f.files.map((x) => h("div", { class: "datarow", style: "grid-template-columns:1fr auto auto", title: x.problem || x.rel },
           h("span", { class: "n" }, x.file),
@@ -641,12 +645,79 @@ async function openScriptFiles(focus) {
             x.status === "hidden" ? h("button", { type: "button", class: "btn small soft", onclick: async () => {
               try { applyTools(await api("programs/visibility", { method: "POST", body: { tool: x.tool, hidden: false } })); render();
                 folders = (await api("scripts/files")).folders; draw(); } catch (e) { toast(e.message); } } }, "Give it a tile") : null,
+            h("button", { type: "button", class: "btn small", onclick: () => moveDialog(x) }, "Move…"),
+            h("button", { type: "button", class: "btn small", onclick: () => askText("Rename the script", "Tiles, plans, chains and settings follow.", x.file.replace(/\.py$/, ""), (v) => act("scripts/rename", { rel: x.rel, name: v }, "Renamed.")) }, "Rename…"),
             h("button", { type: "button", class: "btn small", onclick: () => openPath(`${S.home}/scripts/${x.rel}`) }, "Open"))))
           : h("p", { class: "help" }, "No scripts here yet.")))),
-      h("footer", {}, h("button", { type: "button", class: "link quiet", onclick: () => openPath(S.home + "/scripts") }, "Open the scripts folder"),
+      h("footer", {}, h("div", { class: "row", style: "gap:12px" },
+        h("button", { type: "button", class: "link quiet", onclick: () => openPath(S.home + "/scripts") }, "Open the scripts folder"),
+        h("button", { type: "button", class: "link quiet", onclick: openDuplicates }, "Find duplicates…"),
+        h("button", { type: "button", class: "link quiet", onclick: () => groupDialog() }, "New program from loose scripts…")),
         h("div", { class: "right" }, h("button", { type: "button", class: "btn primary", onclick: closeModal }, "Close"))));
   }
+  async function act(path, body, msg) {
+    try { const r = await api(path, { method: "POST", body }); applyTools(r); render();
+      folders = (await api("scripts/files")).folders; toast(msg + (r.done && r.done.notes && r.done.notes.length ? " " + r.done.notes[0] : "")); openScriptFiles(focus); }
+    catch (e) { toast(e.message); }
+  }
+  function moveDialog(x) {
+    const options = [["", "Single scripts (no program)"], ...folders.filter((f) => f.program).map((f) => [f.folder, f.name])];
+    const sel = h("select", { "aria-label": "Move to" }, options.map(([v, n]) => h("option", { value: v }, n)));
+    showModal(h("section", { class: "dialog narrow", role: "dialog", "aria-modal": "true" },
+      h("header", {}, h("div", { class: "titles" }, h("h1", {}, `Move ${x.file}`), h("p", {}, "Its tile, plans, chains, settings and connections go with it."))),
+      h("div", { class: "body" }, sel),
+      h("footer", {}, h("span", {}), h("div", { class: "right" }, h("button", { type: "button", class: "btn", onclick: closeModal }, "Cancel"),
+        h("button", { type: "button", class: "btn primary", onclick: () => { const v = sel.value; closeModal(); act("scripts/move", { rel: x.rel, program: v }, "Moved."); } }, "Move")))));
+  }
+  function groupDialog() {
+    const loose = (folders.find((f) => !f.program) || { files: [] }).files;
+    if (!loose.length) { toast("There are no single scripts to put together."); return; }
+    const chosen = new Set(); const name = h("input", { type: "text", placeholder: "Name of the new program", "aria-label": "Program name" });
+    showModal(h("section", { class: "dialog", role: "dialog", "aria-modal": "true" },
+      h("header", {}, h("div", { class: "titles" }, h("h1", {}, "New program from loose scripts"), h("p", {}, "Choose the scripts that belong together."))),
+      h("div", { class: "body" }, name, h("div", { style: "max-height:40vh;overflow:auto;margin-top:8px" }, loose.map((x) => h("label", { class: "datarow", style: "grid-template-columns:auto 1fr" },
+        h("input", { type: "checkbox", onchange: (e) => { e.target.checked ? chosen.add(x.rel) : chosen.delete(x.rel); } }), h("span", { class: "n" }, x.file))))),
+      h("footer", {}, h("span", {}), h("div", { class: "right" }, h("button", { type: "button", class: "btn", onclick: closeModal }, "Cancel"),
+        h("button", { type: "button", class: "btn primary", onclick: () => { if (!name.value.trim() || !chosen.size) { toast("Give a name and choose at least one script."); return; }
+          closeModal(); act("scripts/new-program", { name: name.value, rels: [...chosen] }, "Program made."); } }, "Make program")))));
+  }
   draw(); showModal(dialog);
+}
+
+function askText(title, help, value, ok) {
+  const input = h("input", { type: "text", value: value || "", "aria-label": title });
+  const go = () => { const v = input.value.trim(); if (v) { closeModal(); ok(v); } };
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+  showModal(h("section", { class: "dialog narrow", role: "dialog", "aria-modal": "true" },
+    h("header", {}, h("div", { class: "titles" }, h("h1", {}, title), help ? h("p", {}, help) : null)),
+    h("div", { class: "body" }, input),
+    h("footer", {}, h("span", {}), h("div", { class: "right" }, h("button", { type: "button", class: "btn", onclick: closeModal }, "Cancel"),
+      h("button", { type: "button", class: "btn primary", onclick: go }, "OK")))));
+  setTimeout(() => input.focus(), 30);
+}
+
+function openDuplicates() {
+  api("scripts/duplicates").then(({ pairs }) => {
+    const dialog = h("section", { class: "dialog", role: "dialog", "aria-modal": "true" });
+    function draw() {
+      dialog.replaceChildren(
+        h("header", {}, h("div", { class: "titles" }, h("h1", {}, "Duplicates"),
+          h("p", {}, "Scripts that are the same, nearly the same, or share a name. Pick which one goes to the bin; it stays there for 30 days.")),
+          h("button", { type: "button", class: "x", "aria-label": "Close", onclick: closeModal, html: ICON.close })),
+        h("div", { class: "body", style: "max-height:60vh;overflow:auto" }, pairs.length ? pairs.map((p) => h("div", { class: "field" },
+          h("div", { class: "muted" }, p.kind + (p.kind === "identical" ? "" : ` (${Math.round(p.ratio * 100)}%)`)),
+          ["a", "b"].map((k) => h("div", { class: "datarow", style: "grid-template-columns:1fr auto auto" },
+            h("span", { class: "n", title: p[k].rel }, p[k].rel + (p.newer === k ? "  · newest" : "")),
+            h("span", { class: "muted" }, new Date(p[k].modified * 1000).toLocaleDateString()),
+            h("button", { type: "button", class: "btn small", onclick: async () => {
+              try { const r = await api("scripts/discard", { method: "POST", body: { rel: p[k].rel } }); applyTools(r); render();
+                pairs = pairs.filter((x) => x.a.rel !== p[k].rel && x.b.rel !== p[k].rel); toast("In the bin for 30 days."); draw(); }
+              catch (e) { toast(e.message); } } }, "Bin this one")))))
+          : h("p", { class: "help" }, "No duplicates found.")),
+        h("footer", {}, h("span", {}), h("div", { class: "right" }, h("button", { type: "button", class: "btn primary", onclick: closeModal }, "Close"))));
+    }
+    draw(); showModal(dialog);
+  }).catch((e) => toast(e.message));
 }
 
 function confirmRemove(o) {

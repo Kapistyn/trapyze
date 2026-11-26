@@ -192,10 +192,34 @@ def remove_runs(home: Home, bin_: Bin, run_ids: list[str], busy: set[str] | None
     return ids
 
 
+def old_copies(home: Home, days: int, now: float | None = None) -> list[Path]:
+    """Copies traPYze set aside in the scripts folder (scripts/_replaced/*, scripts/_set_aside_*) that are old enough to bin."""
+    now = now or time.time()
+    out: list[Path] = []
+    if not home.scripts.is_dir():
+        return out
+    holders = [p for p in home.scripts.iterdir() if p.name.startswith("_set_aside")]
+    if (home.scripts / "_replaced").is_dir():
+        holders += list((home.scripts / "_replaced").iterdir())
+    for p in holders:
+        try:
+            newest = max([p.stat().st_mtime] + [q.stat().st_mtime for q in p.rglob("*")] if p.is_dir() else [p.stat().st_mtime])
+        except OSError:
+            continue
+        if now - newest > days * 86400:
+            out.append(p)
+    return out
+
+
 def tidy(home: Home, bin_: Bin, settings: dict[str, Any] | None = None) -> dict[str, Any]:
     """Put old results and logs in the bin, one item per run. Returns what moved."""
     s = settings or read(home)
     moved, freed = 0, 0
+    for p in old_copies(home, int(s.get("days") or 30)):
+        size = dir_size(p) if p.is_dir() else p.stat().st_size
+        bin_.put_paths(f"Old copy: {p.name}", "old copies", [p], f"copy-{p.name}"[:40])
+        moved += 1
+        freed += size
     for r in candidates(home, s):
         paths = [p for p in (r["output_dir"], r["run_dir"]) if p and p.exists()]
         size = sum(dir_size(p) for p in paths)

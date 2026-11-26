@@ -2,6 +2,19 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.23.0] - 2026-11-26
+
+### Added
+- Scripts and folders: **Move…** a script into or out of a program, **Rename…**
+  scripts and programs, **New program from loose scripts…**. Tiles, plans, chains,
+  presets, last settings, looks, version history and key permissions follow.
+- **Find duplicates…**: identical, nearly the same and same-name scripts, with a
+  button to put one in the bin.
+- Update from a file or folder: *Looks like a new version of …* for files such as
+  `report_v2.py` or `report (1).py`, with lines added/removed and newer/older.
+- Old copies in `scripts/_replaced` and `scripts/_set_aside_*` are put in the bin
+  by the daily tidy-up after 30 days.
+
 ## [0.22.3] - 2026-11-23
 
 - The README and the guide describe what came in the last versions: the Storage screen

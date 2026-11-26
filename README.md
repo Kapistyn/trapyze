@@ -172,7 +172,11 @@ Old results and run logs are put away by themselves (into a bin where they wait
 30 days), and a Storage screen shows what takes room. All your tools share one
 package library, so a package is installed once. **Back up scripts** keeps every
 tool in a Git history and can send a copy to your own private repository: code
-and notes only, never keys or data.
+and notes only, never keys or data. **Scripts and folders** lets you move a
+script into a program, rename scripts and programs, group loose scripts into a
+new program and find duplicates; tiles, plans, chains, presets, settings and key
+permissions follow. A file that arrives as `report_v2.py` or `report (1).py` is
+recognised as a new version of `report.py` and replaces it, keeping its tile.
 
 ### Light or dark, your colours, its own window
 Its own window with a tray icon (or your browser), light and dark themes,

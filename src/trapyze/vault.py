@@ -482,6 +482,14 @@ class Vault:
         self._data["allowed"][tool_id] = sorted(current | set(names))
         self._save()
 
+    def rename_tools(self, mapping: dict[str, str]) -> None:
+        """A script moved or was renamed: its key permissions follow."""
+        self._need()
+        for old, new in mapping.items():
+            if old in self._data["allowed"] and new not in self._data["allowed"]:
+                self._data["allowed"][new] = self._data["allowed"].pop(old)
+        self._save()
+
     def disallow(self, tool_id: str, name: str) -> None:
         self._need()
         self._data["allowed"][tool_id] = [n for n in self._data["allowed"].get(tool_id, []) if n != name]
