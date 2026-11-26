@@ -228,8 +228,9 @@ def _clean_name(name: str, suffix: str = ".py") -> str:
 
 
 def _in_scripts(home: Home, rel: str) -> Path:
-    path = (home.scripts / rel).resolve()
-    if home.scripts.resolve() not in path.parents or not path.exists() or any(part.startswith("_") for part in Path(rel).parts):
+    path = home.scripts / rel
+    if (home.scripts.resolve() not in path.resolve().parents or not path.exists()
+            or any(part.startswith("_") or part == ".." for part in Path(rel).parts)):
         raise ScriptFileError("That isn't in the scripts folder.")
     return path
 
@@ -324,7 +325,7 @@ def _slug(name: str) -> str:
 
 def rename_program(home: Home, folder_name: str, new_name: str, vault: Any = None) -> dict[str, Any]:
     folder = _in_scripts(home, folder_name)
-    if not folder.is_dir() or folder.parent != home.scripts.resolve():
+    if not folder.is_dir() or folder.parent.resolve() != home.scripts.resolve():
         raise ScriptFileError("That isn't a program.")
     slug = _slug(new_name)
     dest = home.scripts / slug
@@ -365,7 +366,7 @@ def new_program(home: Home, name: str, rels: list[str], vault: Any = None) -> di
     srcs = []
     for rel in rels:
         p = _in_scripts(home, rel)
-        if not p.is_file() or p.suffix != ".py" or p.parent != home.scripts.resolve():
+        if not p.is_file() or p.suffix != ".py" or p.parent.resolve() != home.scripts.resolve():
             raise ScriptFileError("Only single scripts can be put together.")
         srcs.append(p)
     if not srcs:

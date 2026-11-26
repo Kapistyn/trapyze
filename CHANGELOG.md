@@ -2,6 +2,12 @@
 
 What changed in each version of traPYze. The newest is at the top.
 
+## [0.23.1] - 2026-11-26
+
+### Fixed
+- Moving, renaming and grouping scripts failed on Windows when the home folder was
+  reached by a short (8.3) path name; paths are now compared safely.
+
 ## [0.23.0] - 2026-11-26
 
 ### Added
